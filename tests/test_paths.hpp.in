@@ -1,0 +1,10 @@
+#pragma once
+
+#include <string_view>
+
+namespace lxe::test {
+
+/// tests/fixtures in the source tree, injected by CMake.
+inline constexpr std::string_view fixtures_dir = "@LXE_FIXTURES_DIR@";
+
+} // namespace lxe::test

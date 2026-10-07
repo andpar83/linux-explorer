@@ -7,23 +7,56 @@ hierarchical process view (tree by parent PID) with PID, CPU %, memory, owner, c
 description, colour-coded rows (services, own processes, new / exiting processes, elevated),
 sorting, searching, and drill-down into one process: threads, open file descriptors, memory
 maps, environment, sockets, cgroup, limits; plus actions on a process (signal, renice, affinity)
-with confirmation. A status line shows totals (CPU, memory/commit, process count).
+with confirmation. A status line shows totals (CPU, memory, process count).
 
 Data comes directly from `/proc`, `/sys` and netlink. No shelling out to `ps`, `top`, `ss`.
+Linux only: no portability layers, no abstractions for other operating systems.
 
-**UI toolkit is not decided yet** (candidates: Qt 6 GUI, or a TUI with FTXUI/ncurses). The
-data-collection core must stay UI-agnostic (`lxe::proc`, `lxe::sys`, `lxe::model`) so either
-can be attached. Ask before choosing the UI toolkit or adding any third-party dependency.
+The data-collection core (`lxe::sys`, `lxe::proc`, `lxe::model`) stays UI-agnostic; the UI
+(`lxe::ui`, `lxe::app`) only renders models. Ask before adding any third-party dependency.
 
 Development is **iterative**: small, self-contained increments, each fully tested, each
 committed. Build only what the current step asks for; don't anticipate later steps in code.
 
-## Current state
+## Current state (2026-10-06)
 
-- Hello-world skeleton: CMake + presets, sanitizer/hardening/warning configuration, CTest smoke tests.
-- No application code yet. Next steps (in order, subject to change): a `/proc/<pid>/stat`
-  + `status` parser with unit tests, a process-tree model, a periodic sampler with CPU % deltas,
-  then the first UI.
+Done: a `pstree`-style live tree in a window. Columns: process, PID, user, CPU %, memory (RSS),
+threads, state, command line; resizable/reorderable/hideable columns; expand/collapse; pause;
+refresh every second only while unpaused; own processes tinted; kernel threads dimmed; CPU
+heat-map cell; tooltip with the full command line; light/dark theme following the desktop;
+status bar with CPU %, memory, process and thread counts. CLI: `--print-tree` (text tree),
+`--proc-root DIR` (fixtures), `--theme light|dark`, `--screenshot FILE`.
+
+Next steps (in order, subject to change): search/filter box; sort by column; a details pane
+for the selected process (threads, fds, maps, environment); CPU/memory history graphs
+(ImPlot); kill/renice with confirmation; per-process icons; services/new/exiting colouring.
+
+## UI stack: Dear ImGui + SDL3 + OpenGL 3
+
+Chosen 2026-10-06 over Qt (too big, its own object model) and Skia (a renderer, not a toolkit).
+ImGui is immediate mode: `ui::draw_main_window()` rebuilds the whole UI every frame from the
+`model::Model`; the only state that survives a frame is `ui::ViewState`. Custom components are
+plain functions. What to know when touching UI code:
+
+- **Render loop** (`app.cpp`): render continuously only for a short while after input; otherwise
+  sleep until the next refresh or an event. Idle CPU use must stay near zero.
+- **Fonts**: ImGui 1.92 font API (`AddFontFromFileTTF` without a baked size, `style.FontSizeBase`,
+  `style.FontScaleDpi`). The desktop UI font is used (Ubuntu Sans, then Noto, then DejaVu);
+  Font Awesome 4 (`fonts-font-awesome`) is merged in for toolbar icons when installed.
+- **Theme** (`theme.cpp`): one place for colours and spacing; light and dark palettes; meaning-
+  carrying colours live in `ui::Palette`, not inline in views.
+- **ImGui limits**: tree nesting deeper than 31 levels is undefined behaviour inside ImGui
+  (32-bit depth mask), so `process_view.cpp` caps nesting at 24 and flattens the rest. ImGui
+  1.92.9 also computes `1 << (depth - 1)` for a clipped root node, so rows are drawn inside an
+  indent-neutral dummy tree level. Keep both workarounds until a fixed ImGui release is pinned.
+- **Third-party C-isms stay out of our code**: no `IM_COL32`, `IM_ASSERT`, `ImVector` in
+  `lxe::` code; use the `rgba()` helper and standard containers. ImGui/SDL headers are SYSTEM
+  includes so their warnings don't apply to us.
+- **Headless tests**: `tests/support/headless_imgui.hpp` runs real view code through ImGui's
+  null backend (no window, no GPU). Set a small display size to exercise clipping.
+- **Looking at it**: `linux-explorer --screenshot /tmp/x.ppm [--theme dark]` renders a few
+  frames to a PPM and exits. Convert with Python PIL if a PNG is needed.
+- Settings (column widths/order) persist in `~/.local/share/linux-explorer/imgui.ini`.
 
 ## Toolchain
 
@@ -33,6 +66,10 @@ committed. Build only what the current step asks for; don't anticipate later ste
 | Standard  | **C++23** (`-std=c++23`, no GNU extensions) | Chosen for consistency: compiler, CLion and clangd all fully understand it. Stick to the verified list below; no C++26 features. |
 | Build     | CMake >= 3.30, `CMakePresets.json` | `cmake` is **not on PATH** on this machine. CLion's bundled copy works: `/home/andrey/Desktop/clion-2026.2.0.1/bin/cmake/linux/x64/bin/cmake` (Ninja next to it: `.../bin/ninja/linux/x64/ninja`); the path changes with CLion upgrades. Or `sudo apt install cmake ninja-build`. |
 | Generator | not pinned in presets | CLion uses its bundled Ninja; the CLI uses the default (Unix Makefiles) unless `CMAKE_GENERATOR=Ninja` is exported. |
+| SDL3      | system package: `sudo apt install libsdl3-dev` | Window, input, GL context, system theme. `find_package(SDL3 CONFIG)`; a copy elsewhere is found with `SDL3_ROOT=<prefix>`. |
+| Dear ImGui | 1.92.9b, `FetchContent` with SHA256 (`cmake/Dependencies.cmake`) | Built here as `imgui::imgui`, `imgui::sdl3_opengl3` (app), `imgui::null` (tests). Bump URL and hash together. |
+| Catch2    | 3.16.0, `FetchContent` with SHA256 (`tests/CMakeLists.txt`) | Unit/integration/property/UI tests and benchmarks. |
+| Fonts/icons | runtime, optional | Ubuntu Sans / Noto / DejaVu for text; `fonts-font-awesome` for toolbar icons. Missing fonts fall back to ImGui's built-in font and text-only buttons. |
 | Build dirs | `build/<preset>/` (CLI), `cmake-build-*/` (CLion) | Both git-ignored. Never build in-source. |
 
 ### Presets (`cmake --list-presets`)
@@ -40,11 +77,23 @@ committed. Build only what the current step asks for; don't anticipate later ste
 | Preset | Config | What's on |
 |--------|--------|-----------|
 | `debug` | Debug | `_GLIBCXX_ASSERTIONS`, full warnings, `-Werror` |
-| `asan` | Debug | + ASan, LSan, UBSan (incl. `float-divide-by-zero`, `float-cast-overflow`, `bounds-strict`), `pointer-compare`/`pointer-subtract`, `_GLIBCXX_DEBUG` (checked iterators), `_GLIBCXX_SANITIZE_VECTOR` |
+| `asan` | Debug | + ASan, LSan, UBSan (incl. `float-divide-by-zero`, `float-cast-overflow`, `bounds-strict`), `_GLIBCXX_DEBUG` (checked iterators), `_GLIBCXX_SANITIZE_VECTOR`. Not `pointer-compare`/`pointer-subtract`: their check and the vector annotations contradict each other (see `cmake/Sanitizers.cmake`). |
 | `tsan` | Debug | + TSan, UBSan |
 | `ubsan` | Debug | + UBSan only |
-| `analyze` | Debug | + GCC `-fanalyzer` (warnings not fatal: the C++ analyzer still has false positives) |
+| `analyze` | Debug | + GCC `-fanalyzer` on `src/` targets only (`lxe::analyzer`, linked PRIVATE; in tests it drowns in Catch2 macros). Warnings are not fatal. Known false positives, ignore: two `leak of ... _Hash_node ... allocate` reports from `std::unordered_map` in `Sampler` (the analyzer doesn't follow libstdc++ hashtable ownership). Anything else is worth a look. |
 | `release` / `relwithdebinfo` | Release / RelWithDebInfo | hardening: `_FORTIFY_SOURCE=3`, stack protector, stack-clash protection, CET (`-fcf-protection=full`), `-ftrivial-auto-var-init=zero`, PIE, RELRO + `-z now`, `noexecstack` |
+
+Sanitizers and hardening are applied **build-wide** (third-party code included); warnings and the
+analyzer only to our targets through `lxe::options`. Sanitizer runtime options and LSan/TSan
+suppressions are compiled into every executable (`src/sanitizer_defaults.cpp`), so they apply
+under ctest, in CLion run configurations and on the command line alike; environment variables
+still override them. The suppressions cover desktop libraries loaded for the window (GTK via
+libdecor, fontconfig, Pango, D-Bus, GPU driver): they leak at exit and aren't instrumented.
+A report with one of our frames and none of theirs is still shown.
+
+The warning set is in `cmake/CompilerWarnings.cmake`. One exclusion: `-Wno-missing-field-initializers`,
+because GCC fires it on designated initializers that rely on default member initializers,
+which is our idiom. Changing any flag means updating this file.
 
 ### C++23 in GCC 15: what's available (verified with feature-test macros, 2026-10-06)
 
@@ -74,25 +123,19 @@ Not available in GCC 15, don't use: `std::mdspan` (no header in GCC 15), `ranges
 `std::source_location`, concepts, coroutines, `<=>`, `std::chrono` calendars) are all there.
 C++20 modules and `import std` are not used.
 
-Sanitizers available with GCC: address, leak, undefined, thread (MemorySanitizer and HWASan
-need Clang and are not available). Sanitizer runtime options (`ASAN_OPTIONS`, `TSAN_OPTIONS`,
-`UBSAN_OPTIONS`) are attached to every CTest test via `LXE_SANITIZER_ENV`; when running the
-binary by hand or from a CLion run configuration, set them yourself if you need e.g.
-`detect_invalid_pointer_pairs`.
-
-Flags live in `cmake/CompilerWarnings.cmake`, `cmake/Sanitizers.cmake`, `cmake/Hardening.cmake`
-and are applied through the single `lxe::options` INTERFACE target. Every target links it.
-Changing any flag means updating this file.
-
 ### Commands
 
 ```sh
-cmake --workflow --preset asan                # configure + build + test
+sudo apt install libsdl3-dev fonts-font-awesome   # once
+cmake --workflow --preset asan                     # configure + build + test
 cmake --workflow --preset tsan
 cmake --workflow --preset release
 cmake --preset asan && cmake --build --preset asan -j && ctest --preset asan   # step by step
-ctest --preset asan -R unit.                  # one category
-./build/asan/src/linux-explorer
+ctest --preset asan -L unit                        # one category: unit, integration, property, ui, fuzz, e2e
+ctest --preset release -L bench                    # benchmarks (excluded from the default run)
+./build/asan/src/linux-explorer                    # the window, under sanitizers
+./build/release/src/linux-explorer --print-tree    # text tree
+./build/release/src/linux-explorer --screenshot /tmp/lxe.ppm --theme dark
 ```
 
 ### CLion
@@ -102,48 +145,59 @@ The project is opened as a CMake project. CLion creates its own `Debug` profile
 `g++-15` itself. CLion also reads `CMakePresets.json` and lists each configure preset as a
 profile, disabled by default: enable them in *Settings | Build, Execution, Deployment | CMake*
 (`asan` should be the everyday profile; it is the only way to get sanitizers inside the IDE).
-`.clang-format` and `.clang-tidy` are picked up by CLion's bundled clangd. `.idea/` and
-`cmake-build-*/` are git-ignored. Don't add files or settings that only work from the CLI or
-only from the IDE. If CLion's CMake output shows the wrong compiler or the GCC-version warning, use
+CLion uses its Nova (ReSharper C++) engine for highlighting and its bundled clangd for
+`.clang-tidy`; `.clang-format` is applied by the formatter. `.idea/` and `cmake-build-*/` are
+git-ignored. Don't add files or settings that only work from the CLI or only from the IDE.
+If CLion's CMake output shows the wrong compiler or the GCC-version warning, use
 *Tools | CMake | Reset Cache and Reload Project*. An error mark in the editor on code that
 builds cleanly is an IDE problem: confirm with the compiler before changing code.
 
 ## C++ rules
 
-- **Namespaces**: everything in `lxe`, one sub-namespace per area (`lxe::proc`, `lxe::sys`,
-  `lxe::model`, `lxe::ui`). No `using namespace` in headers, never `using namespace std`.
+- **Namespaces**: everything in `lxe`, one sub-namespace per area (`lxe::sys`, `lxe::proc`,
+  `lxe::model`, `lxe::ui`, `lxe::app`, `lxe::util`). No `using namespace` in headers, never
+  `using namespace std`.
 - **Files**: `.hpp` / `.cpp`, `#pragma once`, headers under `src/lxe/...` and included as
-  `"lxe/proc/stat.hpp"`. One class or one cohesive set of functions per file. Modules are
+  `"lxe/proc/parse.hpp"`. One class or one cohesive set of functions per file. Modules are
   planned once GCC + CMake + CLion handle them smoothly; don't convert yet.
 - **Output / formatting**: `std::print`, `std::println`, `std::format`. Never `<iostream>`,
-  `printf`, or string concatenation to build text.
-- **Errors**: `std::expected<T, Error>` for anything that can fail at runtime (I/O, parsing,
-  permissions). Exceptions only for programmer errors / unrecoverable states. `noexcept` on
-  everything that cannot throw. Results are `[[nodiscard]]`; never ignore one.
-- **Ownership**: no `new`/`delete`/`malloc`, no owning raw pointers. `std::unique_ptr`,
-  containers, values. OS handles wrapped in RAII (`lxe::sys::unique_fd`), never a bare `int fd`
-  that outlives one expression.
+  `printf`, or string concatenation to build text. ImGui's `Text("%s", s)` style is confined
+  to `lxe::ui` and wrapped (`text()` helper takes a `string_view`).
+- **Errors**: `std::expected<T, std::error_code>` for anything that can fail at runtime (I/O,
+  parsing, permissions); own error enums get an `std::error_category` (see `proc::ParseError`).
+  Exceptions only for programmer errors / unrecoverable states. `noexcept` on everything that
+  cannot throw. Results are `[[nodiscard]]`; never ignore one (`std::ignore =` when the value is
+  deliberately unused, with a reason nearby).
+- **Ownership**: no `new`/`delete`/`malloc`, no owning raw pointers. `std::unique_ptr` (with a
+  deleter for C handles, see `app.cpp`), containers, values. OS handles wrapped in RAII
+  (`sys::UniqueFd`), never a bare `int fd` that outlives one expression. Paired C init/shutdown
+  calls use `util::ScopeExit`.
 - **Views over copies**: `std::string_view`, `std::span`, ranges (`std::ranges::`,
   `std::views::`, `std::ranges::to`). A raw loop only where the algorithm would be less clear.
-- **Types**: `enum class` always; strong types for identifiers (`ProcessId`, `ThreadId`,
-  `UserId`) instead of bare integers; `std::chrono` for time; `std::filesystem::path` for
+- **Types**: `enum class` always; strong types for identifiers (`ProcessId`, `UserId` in
+  `lxe/ids.hpp`) instead of bare integers; `std::chrono` for time; `std::filesystem::path` for
   paths; fixed-width / `std::size_t` integers; no implicit narrowing (`-Wconversion` is an error;
   use explicit `static_cast` with a reason or a checked conversion helper).
 - **Compile time**: `constexpr` / `consteval` / `static_assert` whenever possible; `const` by
   default; `auto` where the type is obvious or deduced; structured bindings; designated
-  initialisers; `std::optional` for absent values (never sentinels); `<=>` for ordering.
+  initialisers (members may be omitted when their default is meant); `std::optional` for
+  absent values (never sentinels); `<=>` / defaulted `==` for comparisons.
+- **Recursion**: none over data whose depth the machine controls (process trees, directory
+  trees). Use an explicit stack; tests feed chains thousands deep.
 - **Concurrency**: `std::jthread` + `std::stop_token`, `std::atomic`, `std::mutex` with
   `std::scoped_lock`. No raw `pthread`. Every concurrent component gets a test that runs under the
-  `tsan` preset.
-- **Forbidden**: macros (other than `#pragma once` and CMake-injected config), `goto`, C-style
-  casts, `reinterpret_cast` where `std::bit_cast` works, `NULL`, `typedef`, `volatile` for
-  synchronisation, global mutable state, `std::endl`.
+  `tsan` preset. The UI is single-threaded; data collection may move to a worker thread later.
+- **Forbidden**: macros (other than `#pragma once`, CMake-injected config and the one in
+  `sanitizer_defaults.cpp`), `goto`, C-style casts, `reinterpret_cast` where `std::bit_cast`
+  works, `NULL`, `typedef`, `volatile` for synchronisation, global mutable state, `std::endl`.
 - **Linux interface**: all `/proc` / `/sys` / syscall access is isolated in `lxe::sys` and
   `lxe::proc`; `errno` becomes `std::error_code` inside an `std::expected`; **all `/proc`
   content is untrusted input** (hostile process names, kernel version differences, races with
-  exiting processes) and parsers must never crash or UB on it.
+  exiting processes, parent cycles) and parsers must never crash or UB on it. Reads are capped
+  (`sys::read_file` limits).
 - **Privileges**: never require root. Features that need privileges degrade gracefully and
-  are testable unprivileged by injecting the data source.
+  are testable unprivileged by injecting the data source (`proc::ProcFs` takes a root path,
+  `sys::UserNames` takes a lookup function).
 - **Naming** (enforced by `.clang-tidy`): types, concepts, template parameters `PascalCase`;
   functions, variables, namespaces, files, constants `snake_case`; private/protected members
   `snake_case_`. No Hungarian notation, no abbreviations that need explaining.
@@ -153,28 +207,33 @@ builds cleanly is an IDE problem: confirm with the compiler before changing code
 
 ## Testing policy: every kind of test, always
 
-Every change ships with tests. Test names are `<category>.<suite>.<case>` so a category can be
-selected with `ctest -R '^unit\.'`. All categories run under every sanitizer preset.
+Every change ships with tests. Tests are named `<category>.<suite>.<case>` and labelled with
+their category, so one category runs with `ctest -L unit`. All categories run under every
+sanitizer preset. Helpers live in `tests/support/`; fixtures in `tests/fixtures/` (a recorded
+`/proc` tree with a hostile command name, a zombie, a kernel thread and a vanished process).
 
 | Category | What | How |
 |----------|------|-----|
-| `unit` | One function/class in isolation: `/proc` file parsers fed fixture strings, formatting, model logic, strong types. | Catch2 v3 (to be added via `FetchContent` in the next step). Until then, CTest. |
-| `integration` | Several components against real but controlled input: a recorded `/proc` tree under `tests/fixtures/`, or the test process inspecting *itself* (own PID, threads, fds are deterministic). | Catch2 + fixture files. |
-| `e2e` | The real `linux-explorer` binary run with arguments/env; assert exit code and output. | `lxe_add_test()` in `tests/CMakeLists.txt` (exists today). |
-| `property` | Generated inputs for parsers and formatters: round-trips, invariants, no crash on arbitrary bytes. | Catch2 `GENERATE` now; rapidcheck when it earns its place. |
-| `fuzz` | A libFuzzer harness for every parser that consumes untrusted bytes. Harnesses must also compile under GCC as plain tests that replay `tests/fuzz/corpus/*`. | Clang/libFuzzer when available. |
-| `bench` | Micro-benchmarks for hot paths (full `/proc` scan, tree rebuild). Must build on every preset; excluded from the default `ctest` run via the `bench` label. | Catch2 `BENCHMARK` or nanobench. |
-| sanitizers | Not a category: it's *how* the suite runs. `asan` and `tsan` are mandatory before every commit. | Presets. |
+| `unit` | One function/class in isolation: `/proc` parsers fed strings, tree building, CPU sampling arithmetic, formatting, strong types. | Catch2 (`tests/unit/`), registered via `lxe_add_catch_tests`. |
+| `integration` | Several components against real but controlled input: the fixture `/proc` tree, the live `/proc` of the test process itself (own PID, threads, fds are deterministic), real files. | Catch2 (`tests/integration/`). |
+| `property` | Generated inputs: round trips of valid `/proc` content, random parent links, arbitrary bytes into every parser. Seeded by Catch2 (`--rng-seed` reproduces). | Catch2 (`tests/property/`). |
+| `ui` | The real view code driven headlessly through ImGui's null backend: themes, shortcuts, expand/collapse, empty/deep/clipped trees. | Catch2 + `tests/support/headless_imgui.hpp` (`tests/ui/`). |
+| `fuzz` | A libFuzzer harness per untrusted-input parser (`tests/fuzz/*_fuzz.cpp`). Without Clang it is linked to `replay_main.cpp` and replays `tests/fuzz/corpus/*` as a test; add a corpus file for every crash or odd input found. | `fuzz_proc_parsers` target. |
+| `e2e` | The real `linux-explorer` binary: CLI options, text tree of the fixture, text tree of the live system. | `lxe_add_test()` in `tests/CMakeLists.txt`. |
+| `bench` | Micro-benchmarks of hot paths (`/proc` scan, `parse_stat`, sampling, text tree). Built everywhere, run only with `-L bench`. | Catch2 `BENCHMARK` (`tests/bench/`). |
+| sanitizers | Not a category: it's *how* the suite runs. `asan` and `tsan` are mandatory before every commit; also run the window itself under `asan` (`--screenshot`) when UI or app code changed. | Presets. |
 | static analysis | `-Werror` warning set, `.clang-tidy`, `-fanalyzer` (`analyze` preset). | CLion inspections / CLI. |
 
 Rules:
 
 - A bug fix comes with a regression test that fails before the fix and passes after.
 - Tests are deterministic: no sleeps for synchronisation, no dependence on other processes on
-  the machine, no root, no network. Time and the process table are injected, not global.
+  the machine, no root, no network, no display. Time and the process table are injected.
 - Any sanitizer report in a test's output fails the test even with exit code 0
-  (`FAIL_REGULAR_EXPRESSION` in `lxe_add_test`); keep that behaviour in new helpers.
+  (`FAIL_REGULAR_EXPRESSION`); keep that behaviour in new helpers.
 - Never skip, disable, weaken or `-Wno-` anything to get green. Fix the code, or stop and ask.
+  Suppressions for third-party code are the one exception and live in `sanitizer_defaults.cpp`
+  with a reason.
 - Test code follows the same C++ rules as production code.
 
 ## Definition of done for every change
@@ -182,19 +241,32 @@ Rules:
 1. `cmake --workflow --preset asan` passes.
 2. `cmake --workflow --preset tsan` passes.
 3. `cmake --workflow --preset release` passes (hardened, `-Werror`).
-4. New behaviour has tests in the matching categories; `CLAUDE.md` is updated if rules,
+4. UI or app code changed: run `./build/asan/src/linux-explorer --screenshot /tmp/lxe.ppm`
+   (exit 0, no sanitizer output) and look at the picture in both themes. For the `tsan` build
+   use Mesa's software renderer: `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+   LIBGL_ALWAYS_SOFTWARE=1 ./build/tsan/src/linux-explorer --screenshot /tmp/lxe.ppm`. The
+   NVIDIA driver creates threads TSan doesn't track and the process dies inside TSan's runtime.
+5. New behaviour has tests in the matching categories; `CLAUDE.md` is updated if rules,
    toolchain, layout or roadmap changed.
-5. Commit.
+6. Commit.
 
 ## Repository layout
 
 ```
-CMakeLists.txt        project root: language level, options, lxe::options target
-CMakePresets.json     all configure/build/test/workflow presets
-cmake/                CompilerWarnings.cmake, Sanitizers.cmake, Hardening.cmake
-src/                  application code (src/main.cpp; libraries under src/lxe/<area>/)
-tests/                tests, grouped by category; fixtures under tests/fixtures/
-CLAUDE.md             this file; README.md: short public overview
+CMakeLists.txt          root: compiler choice, language level, build-wide instrumentation, lxe::options
+CMakePresets.json       configure/build/test/workflow presets
+cmake/                  CompilerWarnings, Sanitizers, Hardening, Dependencies (SDL3, ImGui)
+src/main.cpp            CLI entry point and option parsing
+src/sanitizer_defaults.cpp   sanitizer runtime options + suppressions, compiled into sanitized builds
+src/lxe/ids.hpp         ProcessId, UserId
+src/lxe/sys/            Linux primitives: UniqueFd, read_file, users, page size
+src/lxe/proc/           /proc parsers (parse.*) and the ProcFs reader (proc_fs.*)
+src/lxe/model/          ProcessEntry/ProcessTree/Model, Sampler (CPU deltas), formatting, text tree
+src/lxe/ui/             theme (palettes, style) and process_view (the main window)
+src/lxe/app/            SDL3 window, OpenGL context, render loop, fonts, screenshot
+src/lxe/util/           ScopeExit
+tests/                  support/, unit/, integration/, property/, ui/, fuzz/ (+corpus/), bench/, fixtures/
+CLAUDE.md               this file; README.md: short public overview
 ```
 
 ## Git
@@ -206,6 +278,6 @@ CLAUDE.md             this file; README.md: short public overview
 
 ## Ask before
 
-- Choosing the UI toolkit or adding any dependency.
+- Adding any dependency, or bumping a pinned one.
 - Changing compiler flags, sanitizer sets or the C++ standard.
 - Anything that needs root, installs packages, or touches processes other than the test's own.

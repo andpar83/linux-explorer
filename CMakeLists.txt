@@ -56,15 +56,25 @@ include(CompilerWarnings)
 include(Sanitizers)
 include(Hardening)
 
-# One INTERFACE target carries every project-wide flag; every real target links it.
+# ---- Build-wide instrumentation --------------------------------------------
+# Applies to every target, third-party code included: sanitizers want the whole program
+# instrumented, and libstdc++ debug mode changes container layouts, so mixing is unsafe.
+# Bounds/precondition checks inside libstdc++ (operator[], iterators...). Cheap; on in every config.
+add_compile_definitions(_GLIBCXX_ASSERTIONS)
+lxe_enable_sanitizers()
+lxe_enable_hardening()
+
+# ---- Third-party dependencies ----------------------------------------------
+include(Dependencies)
+
+# ---- Project-only settings -------------------------------------------------
+# Warnings apply to our code only; every project target links lxe::options. The static
+# analyzer (lxe::analyzer) is linked PRIVATE by src/ targets only.
 add_library(lxe_options INTERFACE)
 add_library(lxe::options ALIAS lxe_options)
 target_compile_features(lxe_options INTERFACE cxx_std_23)
-# Bounds/precondition checks inside libstdc++ (operator[], iterators...). Cheap; on in every config.
-target_compile_definitions(lxe_options INTERFACE _GLIBCXX_ASSERTIONS)
 lxe_set_warnings(lxe_options)
-lxe_enable_sanitizers(lxe_options)
-lxe_enable_hardening(lxe_options)
+lxe_add_analyzer_target()
 
 add_subdirectory(src)
 

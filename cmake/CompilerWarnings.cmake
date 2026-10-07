@@ -21,6 +21,9 @@ function(lxe_set_warnings target)
         -Wmisleading-indentation
         -Wunused
         -Wextra-semi
+        # Part of -Wextra, but it fires on designated initializers that leave members at their
+        # default member initializer, which is the idiom the code base uses on purpose.
+        -Wno-missing-field-initializers
     )
     set(gcc_warnings
         -Wduplicated-cond

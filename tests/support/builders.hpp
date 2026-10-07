@@ -1,0 +1,118 @@
+#pragma once
+
+#include "lxe/ids.hpp"
+#include "lxe/model/process_model.hpp"
+#include "lxe/proc/proc_fs.hpp"
+#include "lxe/sys/users.hpp"
+
+#include <cstdint>
+#include <initializer_list>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace lxe::test {
+
+/// Minimal model entry: only what the tree needs, plus a name for text output.
+inline model::ProcessEntry entry(pid_t pid, pid_t ppid, std::string name = "proc")
+{
+    return model::ProcessEntry{
+        .pid = ProcessId{pid},
+        .ppid = ProcessId{ppid},
+        .name = std::move(name),
+        .uid = UserId{0},
+        .user = "root",
+        .command_line = {},
+        .state = proc::ProcessState::sleeping,
+        .threads = 1,
+        .memory_bytes = 0,
+        .cpu_percent = std::nullopt,
+        .kernel_thread = false,
+    };
+}
+
+/// A model (processes + tree) from entries.
+inline model::Model make_model(std::vector<model::ProcessEntry> processes)
+{
+    model::Model result;
+    result.processes = std::move(processes);
+    result.tree = model::ProcessTree{result.processes};
+    result.summary.processes = result.processes.size();
+    return result;
+}
+
+/// A /proc process record for sampler tests.
+struct ProcessSpec
+{
+    pid_t pid = 1;
+    pid_t ppid = 0;
+    std::string comm = "proc";
+    std::uint64_t cpu_ticks = 0;
+    std::uint64_t start_time_ticks = 0;
+    std::int64_t resident_pages = 0;
+    uid_t uid = 0;
+    std::uint32_t flags = 0;
+    std::int64_t threads = 1;
+    std::vector<std::string> command_line;
+};
+
+inline proc::ProcessInfo process(const ProcessSpec& spec)
+{
+    proc::StatInfo stat;
+    stat.pid = ProcessId{spec.pid};
+    stat.comm = spec.comm;
+    stat.state = proc::ProcessState::sleeping;
+    stat.ppid = ProcessId{spec.ppid};
+    stat.flags = spec.flags;
+    stat.utime_ticks = spec.cpu_ticks;
+    stat.threads = spec.threads;
+    stat.start_time_ticks = spec.start_time_ticks;
+    stat.resident_pages = spec.resident_pages;
+    return proc::ProcessInfo{.stat = std::move(stat), .uid = UserId{spec.uid}, .command_line = spec.command_line};
+}
+
+inline proc::Snapshot snapshot(
+    std::initializer_list<ProcessSpec> specs,
+    proc::CpuTimes cpu,
+    proc::MemoryInfo memory = {.total_bytes = 1000, .available_bytes = 400}
+)
+{
+    proc::Snapshot result{.processes = {}, .system = {.cpu = cpu, .memory = memory}};
+    for (const auto& spec : specs) {
+        result.processes.push_back(process(spec));
+    }
+    return result;
+}
+
+/// User database stand-in: root and alice exist, everyone else is unknown.
+inline sys::UserNames fake_users()
+{
+    return sys::UserNames{[](UserId uid) -> std::optional<std::string> {
+        switch (std::to_underlying(uid)) {
+        case 0:
+            return "root";
+        case 1000:
+            return "alice";
+        default:
+            return std::nullopt;
+        }
+    }};
+}
+
+/// Every node index reachable from the roots, in visiting order (iterative, any depth).
+inline std::vector<std::size_t> walk(const model::ProcessTree& tree)
+{
+    std::vector<std::size_t> visited;
+    std::vector<std::size_t> pending(tree.roots().rbegin(), tree.roots().rend());
+    while (!pending.empty()) {
+        const std::size_t node = pending.back();
+        pending.pop_back();
+        visited.push_back(node);
+        const auto children = tree.children(node);
+        pending.insert(pending.end(), children.rbegin(), children.rend());
+    }
+    return visited;
+}
+
+} // namespace lxe::test

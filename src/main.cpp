@@ -1,7 +1,107 @@
-#include <print>
+#include "lxe/app/app.hpp"
+#include "lxe/model/sampler.hpp"
+#include "lxe/model/text_tree.hpp"
+#include "lxe/proc/proc_fs.hpp"
+#include "lxe/sys/system.hpp"
+#include "lxe/ui/theme.hpp"
+#include "lxe/version.hpp"
 
-int main()
+#include <cstdio>
+#include <exception>
+#include <filesystem>
+#include <print>
+#include <span>
+#include <string_view>
+
+namespace {
+
+constexpr std::string_view usage = R"(Usage: linux-explorer [OPTION]...
+Show the running processes as a live tree in a window.
+
+Options:
+      --print-tree       print the process tree as text (like pstree) and exit
+      --proc-root DIR    read processes from DIR instead of /proc
+      --theme light|dark colour theme (default: follow the desktop setting)
+      --screenshot FILE  open the window, save it to FILE (binary PPM) and exit
+      --version          print the version and exit
+  -h, --help             show this help and exit
+)";
+
+struct Options
 {
-    std::println("Hello, linux-explorer!");
+    bool print_tree = false;
+    std::filesystem::path proc_root = "/proc";
+    lxe::app::Options app;
+};
+
+int print_tree(const lxe::proc::ProcFs& fs)
+{
+    const auto snapshot = fs.read_snapshot();
+    if (!snapshot) {
+        std::println(stderr, "linux-explorer: cannot read {}: {}", fs.root().string(), snapshot.error().message());
+        return 1;
+    }
+    lxe::model::Sampler sampler{lxe::sys::page_size()};
+    std::print("{}", lxe::model::render_text_tree(sampler.update(*snapshot)));
     return 0;
+}
+
+int run(std::span<char* const> args)
+{
+    Options options;
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        const std::string_view arg{args[i]};
+        if (arg == "-h" || arg == "--help") {
+            std::print("{}", usage);
+            return 0;
+        }
+        if (arg == "--version") {
+            std::println("linux-explorer {}", lxe::version);
+            return 0;
+        }
+        if (arg == "--print-tree") {
+            options.print_tree = true;
+            continue;
+        }
+        if (arg == "--proc-root" && i + 1 < args.size()) {
+            options.proc_root = args[++i];
+            continue;
+        }
+        if (arg == "--screenshot" && i + 1 < args.size()) {
+            options.app.screenshot = args[++i];
+            continue;
+        }
+        if (arg == "--theme" && i + 1 < args.size()) {
+            const std::string_view theme{args[++i]};
+            if (theme == "light") {
+                options.app.theme = lxe::ui::Theme::light;
+                continue;
+            }
+            if (theme == "dark") {
+                options.app.theme = lxe::ui::Theme::dark;
+                continue;
+            }
+            std::println(stderr, "linux-explorer: unknown theme '{}' (light or dark)", theme);
+            return 2;
+        }
+        std::println(stderr, "linux-explorer: unrecognized argument '{}'", arg);
+        std::print(stderr, "{}", usage);
+        return 2;
+    }
+
+    const lxe::proc::ProcFs fs{options.proc_root};
+    return options.print_tree ? print_tree(fs) : lxe::app::run(fs, options.app);
+}
+
+} // namespace
+
+int main(int argc, char* argv[])
+{
+    try {
+        return run(std::span<char* const>{argv, static_cast<std::size_t>(argc)});
+    }
+    catch (const std::exception& error) {
+        std::println(stderr, "linux-explorer: fatal error: {}", error.what());
+        return 1;
+    }
 }

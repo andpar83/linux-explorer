@@ -1,0 +1,12 @@
+Name:	my (weird) prog
+Umask:	0022
+State:	S (sleeping)
+Tgid:	101
+Ngid:	0
+Pid:	101
+PPid:	100
+TracerPid:	0
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+FDSize:	64
+Threads:	1

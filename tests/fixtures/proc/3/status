@@ -1,0 +1,12 @@
+Name:	kworker/0:0H
+Umask:	0022
+State:	S (sleeping)
+Tgid:	3
+Ngid:	0
+Pid:	3
+PPid:	2
+TracerPid:	0
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+FDSize:	64
+Threads:	1

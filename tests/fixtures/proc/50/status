@@ -1,0 +1,12 @@
+Name:	agetty
+Umask:	0022
+State:	S (sleeping)
+Tgid:	50
+Ngid:	0
+Pid:	50
+PPid:	1
+TracerPid:	0
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+FDSize:	64
+Threads:	1

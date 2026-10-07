@@ -1,9 +1,10 @@
 # Security hardening for non-Debug builds without sanitizers (sanitizers and
 # _FORTIFY_SOURCE interfere with each other, and -O0 can't fortify anyway).
+# Applied build-wide, like the sanitizers.
 
 option(LXE_HARDENING "Enable hardening flags in non-Debug, non-sanitized builds" ON)
 
-function(lxe_enable_hardening target)
+function(lxe_enable_hardening)
     if(NOT LXE_HARDENING OR NOT LXE_SANITIZER STREQUAL "none")
         return()
     endif()
@@ -21,7 +22,7 @@ function(lxe_enable_hardening target)
     endif()
     set(link_flags -pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack)
 
-    target_compile_definitions(${target} INTERFACE "$<${on}:_FORTIFY_SOURCE=3>")
-    target_compile_options(${target} INTERFACE "$<${on}:${compile_flags}>")
-    target_link_options(${target} INTERFACE "$<${on}:${link_flags}>")
+    add_compile_definitions("$<${on}:_FORTIFY_SOURCE=3>")
+    add_compile_options("$<${on}:${compile_flags}>")
+    add_link_options("$<${on}:${link_flags}>")
 endfunction()
