@@ -5,6 +5,8 @@ process on the machine with CPU, memory, owner and command line, and (eventually
 into threads, file descriptors, memory maps, sockets and environment. Data comes straight from
 `/proc`; the UI is Dear ImGui on SDL3 + OpenGL.
 
+![linux-explorer showing the process tree, the memory maps of the selected process and the pages of one mapping](docs/screenshot.png)
+
 Status: early. Today it shows the process tree with PID, user, CPU %, memory, threads, state
 and command line, refreshing every second; the memory maps of the selected process in a lower
 pane with their page accounting; and for a selected mapping, which of its pages are resident,
