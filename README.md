@@ -24,6 +24,7 @@ If `cmake` isn't on PATH, CLion's bundled copy works (see `CLAUDE.md`), or
 
 ## CLion
 
-Open the project directory. CLion picks up `CMakePresets.json`; enable the presets you want in
-*Settings | Build, Execution, Deployment | CMake* (at least `asan`). `.clang-format` and
-`.clang-tidy` are applied by the IDE automatically.
+Open the project directory. CLion's default `Debug` profile works out of the box. CLion also
+picks up `CMakePresets.json`; enable the presets you want in *Settings | Build, Execution,
+Deployment | CMake* (at least `asan`, which is how you get sanitizers inside the IDE).
+`.clang-format` and `.clang-tidy` are applied by the IDE automatically.

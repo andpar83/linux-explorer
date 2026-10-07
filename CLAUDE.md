@@ -29,7 +29,7 @@ committed. Build only what the current step asks for; don't anticipate later ste
 
 | Component | What we use | Notes |
 |-----------|-------------|-------|
-| Compiler  | GCC 16 (`g++-16`, Ubuntu package `16-20260322-1ubuntu1`: a trunk snapshot that reports itself as 16.0.1 *experimental*) | Pinned with `CMAKE_CXX_COMPILER` in the hidden `base` preset so the CLI and CLion agree. Plain `g++` is still GCC 15.2: Ubuntu's `g++` metapackage follows the distro default and installing `g++-16` doesn't move it. Being a snapshot, a compiler bug is a possibility; if something looks like one, check with `g++-15` before blaming the code. Clang is not installed (needed later for libFuzzer / CLI clang-tidy). |
+| Compiler  | GCC 16 (`g++-16`, Ubuntu package `16-20260322-1ubuntu1`: a trunk snapshot that reports itself as 16.0.1 *experimental*) | Pinned with `CMAKE_CXX_COMPILER` in the hidden `base` preset, and `CMakeLists.txt` falls back to `g++-16` when no compiler was chosen (CLion's default profile, bare `cmake -S . -B build`). An explicit `-DCMAKE_CXX_COMPILER` or `CXX` still wins. Plain `g++` is still GCC 15.2: Ubuntu's `g++` metapackage follows the distro default and installing `g++-16` doesn't move it. Being a snapshot, a compiler bug is a possibility; if something looks like one, check with `g++-15` before blaming the code. Clang is not installed (needed later for libFuzzer / CLI clang-tidy). |
 | Standard  | C++26 (`-std=c++26`, no GNU extensions) | Use a feature only if this GCC 16 / libstdc++ 16 implements it: see the verified list below, then cppreference's compiler-support table. |
 | Build     | CMake >= 3.30, `CMakePresets.json` | `cmake` is **not on PATH** on this machine. CLion's bundled copy works: `/home/andrey/Desktop/clion-2026.2.0.1/bin/cmake/linux/x64/bin/cmake` (Ninja next to it: `.../bin/ninja/linux/x64/ninja`); the path changes with CLion upgrades. Or `sudo apt install cmake ninja-build`. |
 | Generator | not pinned in presets | CLion uses its bundled Ninja; the CLI uses the default (Unix Makefiles) unless `CMAKE_GENERATOR=Ninja` is exported. |
@@ -89,11 +89,15 @@ ctest --preset asan -R unit.                  # one category
 
 ### CLion
 
-The project is opened as a CMake project; CLion reads `CMakePresets.json` and lists each
-configure preset as a CMake profile (enable them in *Settings | Build, Execution, Deployment |
-CMake*; `asan` should be the everyday profile). `.clang-format` and `.clang-tidy` are picked up
-by CLion's bundled clangd. `.idea/` and `cmake-build-*/` are git-ignored. Don't add files or
-settings that only work from the CLI or only from the IDE.
+The project is opened as a CMake project. CLion creates its own `Debug` profile
+(`cmake-build-debug/`, Ninja, no compiler given), which works because `CMakeLists.txt` picks
+`g++-16` itself. CLion also reads `CMakePresets.json` and lists each configure preset as a
+profile, disabled by default: enable them in *Settings | Build, Execution, Deployment | CMake*
+(`asan` should be the everyday profile; it is the only way to get sanitizers inside the IDE).
+`.clang-format` and `.clang-tidy` are picked up by CLion's bundled clangd. `.idea/` and
+`cmake-build-*/` are git-ignored. Don't add files or settings that only work from the CLI or
+only from the IDE. If CLion's CMake output shows the wrong compiler, use *Tools | CMake | Reset
+Cache and Reload Project*.
 
 ## C++ rules
 

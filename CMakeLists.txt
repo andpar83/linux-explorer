@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.30...4.3)
 
+# Prefer GCC 16 when the caller hasn't chosen a compiler: CLion's default profile and a bare
+# `cmake -S . -B build` pass none. An explicit -DCMAKE_CXX_COMPILER or CXX env var still wins.
+# Must stay above project(), which is where compiler detection happens.
+if(NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
+    find_program(LXE_GXX16 NAMES g++-16 NO_CACHE)
+    if(LXE_GXX16)
+        set(CMAKE_CXX_COMPILER "${LXE_GXX16}")
+    endif()
+endif()
+
 project(linux_explorer
     VERSION 0.1.0
     DESCRIPTION "Process Explorer-style live system inspector for Linux"
@@ -10,7 +20,8 @@ if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
-    message(FATAL_ERROR "GCC >= 16 is required (found ${CMAKE_CXX_COMPILER_VERSION}); the presets pin g++-16")
+    message(FATAL_ERROR "GCC >= 16 is required (found ${CMAKE_CXX_COMPILER_VERSION} at ${CMAKE_CXX_COMPILER}). "
+        "Install g++-16, or pass -DCMAKE_CXX_COMPILER=g++-16 / set the CLion toolchain compiler to it.")
 endif()
 
 # ---- Language -------------------------------------------------------------
