@@ -98,6 +98,8 @@ plain functions. What to know when touching UI code:
 | Dear ImGui | 1.92.9b, `FetchContent` with SHA256 (`cmake/Dependencies.cmake`) | Built here as `imgui::imgui`, `imgui::sdl3_opengl3` (app), `imgui::null` (tests). Bump URL and hash together. |
 | Catch2    | 3.16.0, `FetchContent` with SHA256 (`tests/CMakeLists.txt`) | Unit/integration/property/UI tests and benchmarks. |
 | Fonts/icons | runtime, optional | Ubuntu Sans / Noto / DejaVu for text; `fonts-font-awesome` for toolbar icons. Missing fonts fall back to ImGui's built-in font and text-only buttons. |
+| Packaging | CPack DEB (`cmake/Packaging.cmake`) | `cmake --build --preset release --target package` makes `build/release/linux-explorer_<version>_amd64.deb`. Installs only the binary, `packaging/linux-explorer.desktop` and LICENSE as `copyright`; never tests or third-party code. Runtime dependencies come from `dpkg-shlibdeps` (package `dpkg-dev`). |
+| License   | MIT (`LICENSE`) | One file for the project; no per-file headers. Dependencies: ImGui MIT, Catch2 BSL-1.0, SDL3 zlib. |
 | Build dirs | `build/<preset>/` (CLI), `cmake-build-*/` (CLion) | Both git-ignored. Never build in-source. |
 
 ### Presets (`cmake --list-presets`)
@@ -180,6 +182,20 @@ git-ignored. Don't add files or settings that only work from the CLI or only fro
 If CLion's CMake output shows the wrong compiler or the GCC-version warning, use
 *Tools | CMake | Reset Cache and Reload Project*. An error mark in the editor on code that
 builds cleanly is an IDE problem: confirm with the compiler before changing code.
+
+### CI and releases
+
+`.github/workflows/ci.yml` runs on every push to `main`, on pull requests and on `v*` tags,
+inside an `ubuntu:26.04` container (the GitHub-hosted runners' own Ubuntu is older and lacks
+GCC 15 and SDL3). Jobs: the `asan` and `tsan` workflows, run under `setarch -R` because the
+sanitizers' shadow memory doesn't tolerate the runners' high-entropy address randomisation; and
+the `release` workflow followed by the `.deb` build, an `apt install` of the result and a smoke
+run of the installed binary. The `.deb` is uploaded as a workflow artifact; on a tag the job
+also creates the GitHub Release with it. The container runs as root, so tests must not assume
+an unprivileged user (the permission-denied test uses `SKIP` as root).
+
+Releasing: bump `project(VERSION ...)` in `CMakeLists.txt`, commit, wait for green CI on
+`main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The tag must match the version.
 
 ## C++ rules
 
@@ -277,14 +293,18 @@ Rules:
    NVIDIA driver creates threads TSan doesn't track and the process dies inside TSan's runtime.
 5. New behaviour has tests in the matching categories; `CLAUDE.md` is updated if rules,
    toolchain, layout or roadmap changed.
-6. Commit.
+6. Commit; after pushing, CI on `main` must be green before anything is tagged.
 
 ## Repository layout
 
 ```
 CMakeLists.txt          root: compiler choice, language level, build-wide instrumentation, lxe::options
 CMakePresets.json       configure/build/test/workflow presets
-cmake/                  CompilerWarnings, Sanitizers, Hardening, Dependencies (SDL3, ImGui)
+cmake/                  CompilerWarnings, Sanitizers, Hardening, Dependencies (SDL3, ImGui), Packaging (CPack DEB)
+packaging/              desktop entry installed by the package
+.github/workflows/      CI: sanitizer runs, release build, .deb artifact and GitHub Releases
+docs/                   README screenshot
+LICENSE                 MIT
 src/main.cpp            CLI entry point and option parsing
 src/sanitizer_defaults.cpp   sanitizer runtime options + suppressions, compiled into sanitized builds
 src/lxe/ids.hpp         ProcessId, UserId

@@ -82,3 +82,7 @@ if(LXE_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+if(PROJECT_IS_TOP_LEVEL)
+    include(Packaging)
+endif()

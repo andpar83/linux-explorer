@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Linux Explorer
+GenericName=Process Explorer
+Comment=Live process tree with memory maps and page-level detail
+Exec=linux-explorer
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=process;memory;top;pstree;pmap;

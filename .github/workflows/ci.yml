@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_GENERATOR: Ninja
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  sanitizers:
+    name: ${{ matrix.preset }} on Ubuntu 26.04
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [asan, tsan]
+    steps:
+      - name: Install the toolchain
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends g++-15 cmake ninja-build libsdl3-dev git ca-certificates
+      - uses: actions/checkout@v4
+      - name: Configure, build and test
+        # setarch -R turns address-space randomisation off: the sanitizers' shadow memory layout
+        # doesn't tolerate the high-entropy randomisation GitHub's kernels use.
+        run: setarch "$(uname -m)" -R cmake --workflow --preset ${{ matrix.preset }}
+
+  package:
+    name: Release build and .deb on Ubuntu 26.04
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    permissions:
+      contents: write
+    steps:
+      - name: Install the toolchain
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends g++-15 cmake ninja-build libsdl3-dev dpkg-dev git ca-certificates gh
+      - uses: actions/checkout@v4
+      - name: Configure, build and test
+        run: cmake --workflow --preset release
+      - name: Build the package
+        run: cmake --build --preset release --target package
+      - name: Install the package and run it
+        run: |
+          apt-get install -y ./build/release/linux-explorer_*.deb
+          linux-explorer --version
+          linux-explorer --print-tree | head -5
+          linux-explorer --print-maps self | tail -1
+          dpkg -L linux-explorer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-explorer-deb
+          path: build/release/linux-explorer_*.deb
+          if-no-files-found: error
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gh release create "$GITHUB_REF_NAME" build/release/linux-explorer_*.deb \
+            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

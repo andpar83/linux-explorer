@@ -1,5 +1,7 @@
 # linux-explorer
 
+[![CI](https://github.com/andpar83/linux-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/andpar83/linux-explorer/actions/workflows/ci.yml)
+
 A Linux counterpart of Sysinternals **Process Explorer**: a live, hierarchical view of every
 process on the machine with CPU, memory, owner and command line, and (eventually) drill-down
 into threads, file descriptors, memory maps, sockets and environment. Data comes straight from
@@ -12,6 +14,18 @@ and command line, refreshing every second; the memory maps of the selected proce
 pane with their page accounting; and for a selected mapping, which of its pages are resident,
 swapped or absent, in a light or dark theme that follows the desktop. See `CLAUDE.md` for
 goals, rules and roadmap.
+
+## Install
+
+Ubuntu 26.04 or newer: download the `.deb` from the
+[latest release](https://github.com/andpar83/linux-explorer/releases) and install it:
+
+```sh
+sudo apt install ./linux-explorer_*.deb
+```
+
+It pulls in SDL3 and recommends the Ubuntu or Noto fonts; `fonts-font-awesome` adds toolbar
+icons. Linux Explorer then appears in the application menu and as `linux-explorer`.
 
 ## Build
 
@@ -53,3 +67,8 @@ Open the project directory. CLion's default `Debug` profile works out of the box
 picks up `CMakePresets.json`; enable the presets you want in *Settings | Build, Execution,
 Deployment | CMake* (at least `asan`, which is how you get sanitizers inside the IDE).
 `.clang-format` and `.clang-tidy` are applied by the IDE automatically.
+
+## License
+
+MIT, see `LICENSE`. Dear ImGui (MIT) and Catch2 (Boost) are downloaded at build time; SDL3
+(zlib) comes from the system.
