@@ -9,8 +9,8 @@ if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
     message(FATAL_ERROR "In-source builds are not allowed. Use a preset: cmake --preset asan")
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 15)
-    message(FATAL_ERROR "GCC >= 15 is required for C++26 (found ${CMAKE_CXX_COMPILER_VERSION})")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
+    message(FATAL_ERROR "GCC >= 16 is required (found ${CMAKE_CXX_COMPILER_VERSION}); the presets pin g++-16")
 endif()
 
 # ---- Language -------------------------------------------------------------

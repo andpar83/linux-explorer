@@ -29,8 +29,8 @@ committed. Build only what the current step asks for; don't anticipate later ste
 
 | Component | What we use | Notes |
 |-----------|-------------|-------|
-| Compiler  | GCC 15.2 (`g++`, system default) | GCC 16 is packaged for Ubuntu 26.04 (`sudo apt install g++-16`) but **not installed**. To use it: `CXX=g++-16 cmake --preset asan`, or pick it in CLion's toolchain. Update this table when switching. Clang is not installed (needed later for libFuzzer / CLI clang-tidy). |
-| Standard  | C++26 (`-std=c++26`, no GNU extensions) | Use a feature only if GCC 15 / libstdc++ 15 implements it (check cppreference's compiler-support table). |
+| Compiler  | GCC 16 (`g++-16`, Ubuntu package `16-20260322-1ubuntu1`: a trunk snapshot that reports itself as 16.0.1 *experimental*) | Pinned with `CMAKE_CXX_COMPILER` in the hidden `base` preset so the CLI and CLion agree. Plain `g++` is still GCC 15.2: Ubuntu's `g++` metapackage follows the distro default and installing `g++-16` doesn't move it. Being a snapshot, a compiler bug is a possibility; if something looks like one, check with `g++-15` before blaming the code. Clang is not installed (needed later for libFuzzer / CLI clang-tidy). |
+| Standard  | C++26 (`-std=c++26`, no GNU extensions) | Use a feature only if this GCC 16 / libstdc++ 16 implements it: see the verified list below, then cppreference's compiler-support table. |
 | Build     | CMake >= 3.30, `CMakePresets.json` | `cmake` is **not on PATH** on this machine. CLion's bundled copy works: `/home/andrey/Desktop/clion-2026.2.0.1/bin/cmake/linux/x64/bin/cmake` (Ninja next to it: `.../bin/ninja/linux/x64/ninja`); the path changes with CLion upgrades. Or `sudo apt install cmake ninja-build`. |
 | Generator | not pinned in presets | CLion uses its bundled Ninja; the CLI uses the default (Unix Makefiles) unless `CMAKE_GENERATOR=Ninja` is exported. |
 | Build dirs | `build/<preset>/` (CLI), `cmake-build-*/` (CLion) | Both git-ignored. Never build in-source. |
@@ -45,6 +45,26 @@ committed. Build only what the current step asks for; don't anticipate later ste
 | `ubsan` | Debug | + UBSan only |
 | `analyze` | Debug | + GCC `-fanalyzer` (warnings not fatal: the C++ analyzer still has false positives) |
 | `release` / `relwithdebinfo` | Release / RelWithDebInfo | hardening: `_FORTIFY_SOURCE=3`, stack protector, stack-clash protection, CET (`-fcf-protection=full`), `-ftrivial-auto-var-init=zero`, PIE, RELRO + `-z now`, `noexecstack` |
+
+### C++26 support in this GCC 16 (checked with feature-test macros on 2026-10-06)
+
+Available, on by default:
+
+- Language: pack indexing, placeholder `_` variables, `= delete("reason")`, variadic friends,
+  `constexpr` exceptions, expansion statements (`template for`).
+- Library: `std::print`/`std::println` (incl. 2024 revisions), `std::format`, `std::expected`,
+  `std::ranges::to`, `std::generator`, `std::views::concat`, `std::inplace_vector`,
+  `std::function_ref`, `std::text_encoding`, `<debugging>` (`std::breakpoint`,
+  `std::is_debugger_present`), range support for `std::optional`, `constexpr` exceptions in the library.
+
+Available behind a flag, **not enabled in the project yet** (decide when first needed, then add
+the flag in `CMakeLists.txt` and update this list):
+
+- Contracts (`pre`, `post`, `contract_assert`): `-fcontracts`, `__cpp_contracts == 202502`.
+
+Not available: reflection (`-freflection` is accepted but `__cpp_reflection` is not defined;
+treat it as absent), trivial relocatability, `std::hive`, senders/receivers (`std::execution`),
+`import std` (`__cpp_lib_modules` undefined).
 
 Sanitizers available with GCC: address, leak, undefined, thread (MemorySanitizer and HWASan
 need Clang and are not available). Sanitizer runtime options (`ASAN_OPTIONS`, `TSAN_OPTIONS`,
