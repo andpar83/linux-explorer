@@ -18,6 +18,9 @@ struct Palette
     ImVec4 kernel_thread_text{}; ///< Kernel threads are shown dimmed.
     ImVec4 muted_text{};         ///< Secondary text such as the status bar.
     ImVec4 accent_text{};        ///< Highlighted status text, e.g. "Paused".
+    ImU32 page_present = 0;      ///< Presence strip: pages resident in memory.
+    ImU32 page_swapped = 0;      ///< Presence strip: pages in swap.
+    ImU32 page_absent = 0;       ///< Presence strip: pages never touched or reclaimed.
 };
 
 /// Installs the ImGui style for `theme`, scaled for the display, and returns its palette.

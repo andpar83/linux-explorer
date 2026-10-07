@@ -1,4 +1,5 @@
 #include "lxe/app/app.hpp"
+#include "lxe/model/details.hpp"
 #include "lxe/model/sampler.hpp"
 #include "lxe/model/text_maps.hpp"
 #include "lxe/model/text_tree.hpp"
@@ -27,6 +28,7 @@ Options:
       --print-maps PID   print the memory maps of process PID ("self" for this one) and exit
       --proc-root DIR    read processes from DIR instead of /proc
       --select PID       open with process PID ("self" for this one) selected
+      --select-mapping M also select mapping M of it: a hex start address or a path like "[heap]"
       --theme light|dark colour theme (default: follow the desktop setting)
       --screenshot FILE  open the window, save it to FILE (binary PPM) and exit
       --version          print the version and exit
@@ -43,7 +45,7 @@ struct Options
 
 int print_maps(const lxe::proc::ProcFs& fs, lxe::ProcessId pid)
 {
-    const auto maps = fs.read_maps(pid);
+    const auto maps = lxe::model::load_mappings(fs, pid);
     if (!maps) {
         std::println(stderr, "linux-explorer: cannot read maps of process {}: {}", pid, maps.error().message());
         return 1;
@@ -97,6 +99,10 @@ int run(std::span<char* const> args)
         }
         if (arg == "--screenshot" && i + 1 < args.size()) {
             options.app.screenshot = args[++i];
+            continue;
+        }
+        if (arg == "--select-mapping" && i + 1 < args.size()) {
+            options.app.selected_mapping = args[++i];
             continue;
         }
         if (arg == "--theme" && i + 1 < args.size()) {

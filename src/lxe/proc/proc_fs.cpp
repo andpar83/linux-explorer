@@ -1,9 +1,15 @@
 #include "lxe/proc/proc_fs.hpp"
 
 #include "lxe/sys/file.hpp"
+#include "lxe/sys/unique_fd.hpp"
+
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <format>
+#include <span>
 #include <utility>
 
 namespace lxe::proc {
@@ -13,6 +19,8 @@ namespace {
 constexpr std::size_t cmdline_read_limit = 64 * 1024;
 /// Cap for maps: a browser's tens of thousands of mappings are a few megabytes of text.
 constexpr std::size_t maps_read_limit = 64 * 1024 * 1024;
+/// smaps is about 25 lines per mapping.
+constexpr std::size_t smaps_read_limit = 512 * 1024 * 1024;
 
 } // namespace
 
@@ -65,6 +73,44 @@ std::expected<ProcessInfo, std::error_code> ProcFs::read_process(ProcessId pid) 
 std::expected<std::vector<MemoryMapping>, std::error_code> ProcFs::read_maps(ProcessId pid) const
 {
     return sys::read_file(root_ / std::format("{}", pid) / "maps", maps_read_limit).and_then(parse_maps);
+}
+
+std::expected<std::vector<SmapsEntry>, std::error_code> ProcFs::read_smaps(ProcessId pid) const
+{
+    return sys::read_file(root_ / std::format("{}", pid) / "smaps", smaps_read_limit).and_then(parse_smaps);
+}
+
+std::expected<std::vector<std::uint64_t>, std::error_code> ProcFs::read_pagemap(
+    ProcessId pid,
+    std::uint64_t first_page,
+    std::size_t count
+) const
+{
+    constexpr std::size_t entry_bytes = sizeof(std::uint64_t);
+    const auto path = root_ / std::format("{}", pid) / "pagemap";
+    const sys::UniqueFd fd{::open(path.c_str(), O_RDONLY | O_CLOEXEC)};
+    if (!fd.valid()) {
+        return std::unexpected{std::error_code{errno, std::system_category()}};
+    }
+    std::vector<std::uint64_t> entries(count);
+    std::size_t have = 0;
+    while (have < count) {
+        const auto want = (count - have) * entry_bytes;
+        const auto offset = static_cast<off_t>((first_page + have) * entry_bytes);
+        const ssize_t got = ::pread(fd.get(), std::span{entries}.subspan(have).data(), want, offset);
+        if (got < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return std::unexpected{std::error_code{errno, std::system_category()}};
+        }
+        if (got == 0) {
+            break; // past the end of the address space
+        }
+        have += static_cast<std::size_t>(got) / entry_bytes;
+    }
+    entries.resize(have);
+    return entries;
 }
 
 std::expected<SystemInfo, std::error_code> ProcFs::read_system() const

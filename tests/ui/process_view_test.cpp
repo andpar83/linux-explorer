@@ -15,8 +15,10 @@ using lxe::ProcessId;
 using lxe::UserId;
 using lxe::test::entry;
 using lxe::test::HeadlessImGui;
+using lxe::test::info;
 using lxe::test::make_model;
 using lxe::test::mapping;
+using lxe::test::pagemap_entry;
 using lxe::ui::ExpandRequest;
 using lxe::ui::ViewConfig;
 using lxe::ui::ViewState;
@@ -55,14 +57,32 @@ ViewConfig config_for(lxe::ui::Theme theme)
 
 const lxe::model::ProcessDetails no_details{};
 
-lxe::model::ProcessDetails details_for(pid_t pid, std::size_t mappings)
+lxe::model::ProcessDetails details_for(pid_t pid, std::size_t mappings, bool with_stats = false)
 {
-    lxe::model::ProcessDetails details{.pid = ProcessId{pid}, .maps = {}, .error = {}};
+    lxe::model::ProcessDetails details{.pid = ProcessId{pid}};
     for (std::size_t i = 0; i < mappings; ++i) {
         const auto start = 0x7f0000000000U + static_cast<std::uint64_t>(i) * 0x2000U;
-        details.maps.push_back(mapping(start, start + 0x1000U, i % 3 == 0 ? "" : "/usr/lib/libfoo.so", "r-xp"));
+        auto entry = info(mapping(start, start + 0x1000U, i % 3 == 0 ? "" : "/usr/lib/libfoo.so", "r-xp"));
+        if (with_stats) {
+            lxe::proc::MappingStats stats;
+            stats.rss = 4096;
+            stats.pss = 2048;
+            stats.vm_flags = {"rd", "ex", "zz"};
+            stats.thp_eligible = i % 2 == 0;
+            entry.stats = stats;
+        }
+        details.maps.push_back(std::move(entry));
     }
     return details;
+}
+
+lxe::model::PageSummary pages_for(std::size_t count)
+{
+    std::vector<std::uint64_t> entries;
+    for (std::size_t i = 0; i < count; ++i) {
+        entries.push_back(pagemap_entry(i % 2 == 0, i % 5 == 1, i % 3 == 0, i % 4 == 0, i % 7 == 0));
+    }
+    return lxe::model::summarize_pages(entries, 4096, count, 512);
 }
 
 } // namespace
@@ -220,4 +240,54 @@ TEST_CASE("main_window.ctrl_m_toggles_the_details_pane")
     // A plain M does nothing.
     std::ignore = imgui.press(ImGuiKey_M, draw);
     CHECK(state.show_details);
+}
+
+TEST_CASE("main_window.pages_panel_shows_every_state")
+{
+    HeadlessImGui imgui;
+    const auto model = sample_model();
+    const auto config = config_for(lxe::ui::Theme::light);
+    ViewState state{.paused = false, .selected = ProcessId{100}};
+    const auto draw = [&](const lxe::model::ProcessDetails& details) {
+        return imgui.frame([&] { return lxe::ui::draw_main_window(model, details, state, config); });
+    };
+
+    auto details = details_for(100, 5, true);
+    std::ignore = draw(details); // no mapping selected: hint
+
+    details.selected_mapping = details.maps[1].mapping.start;
+    details.pages = pages_for(1000);
+    std::ignore = draw(details); // strip + counts + stats
+
+    details.pages = pages_for(3);
+    std::ignore = draw(details); // fewer pages than pixels
+
+    details.pages->pages = 5'000'000; // sampled
+    std::ignore = draw(details);
+
+    details.pages.reset();
+    details.pages_error = std::make_error_code(std::errc::permission_denied);
+    std::ignore = draw(details);
+
+    details.selected_mapping = 0x42; // gone
+    std::ignore = draw(details);
+
+    auto plain = details_for(100, 2, false); // no smaps on this kernel
+    plain.selected_mapping = plain.maps[0].mapping.start;
+    plain.pages = pages_for(10);
+    std::ignore = draw(plain);
+}
+
+TEST_CASE("main_window.selecting_a_process_forgets_the_mapping")
+{
+    HeadlessImGui imgui;
+    const auto model = sample_model();
+    const auto config = config_for(lxe::ui::Theme::dark);
+    ViewState state{.paused = false, .selected = ProcessId{100}, .selected_mapping = 0x1000};
+    std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, no_details, state, config); });
+    CHECK(state.selected_mapping == 0x1000); // untouched while the selection stays
+    state.selected = ProcessId{101};
+    state.selected_mapping.reset(); // what a click on another row does (see draw_row)
+    std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, no_details, state, config); });
+    CHECK_FALSE(state.selected_mapping.has_value());
 }

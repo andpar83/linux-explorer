@@ -57,7 +57,9 @@ endfunction()
 lxe_add_catch_tests(unit SOURCES
     unit/format_test.cpp
     unit/maps_format_test.cpp
+    unit/page_summary_test.cpp
     unit/parse_maps_test.cpp
+    unit/parse_smaps_test.cpp
     unit/parse_stat_test.cpp
     unit/parse_status_cmdline_test.cpp
     unit/parse_system_test.cpp
@@ -112,12 +114,16 @@ lxe_add_test(e2e.cli.print_tree_of_fixture
     LABELS e2e)
 lxe_add_test(e2e.cli.print_tree_shows_itself COMMAND linux-explorer --print-tree
     PASS_REGEX "linux-explorer\\([0-9]+\\)" LABELS e2e)
-lxe_add_test(e2e.cli.print_maps_of_fixture
+lxe_add_test(e2e.cli.print_maps_of_fixture_without_smaps
     COMMAND linux-explorer --print-maps 101 --proc-root "${LXE_FIXTURES_DIR}/proc"
-    PASS_REGEX "^Address +Size Perms Offset +Path\n0000000000400000 +4\\.0 KiB r-xp +00000000 /home/alice/my prog\n.*00007f0000200000 +1\\.0 MiB r--s +00000000 /dev/shm/cache \\(deleted\\)\n.*ffffffffff600000 +4\\.0 KiB --xp +00000000 \\[vsyscall\\]\n8 mappings, 2\\.3 MiB mapped\n$"
+    PASS_REGEX "^Address +Size +Rss Perms Offset +Path\n0000000000400000 +4\\.0 KiB +r-xp +00000000 /home/alice/my prog\n.*00007f0000200000 +1\\.0 MiB +r--s +00000000 /dev/shm/cache \\(deleted\\)\n.*ffffffffff600000 +4\\.0 KiB +--xp +00000000 \\[vsyscall\\]\n8 mappings, 2\\.3 MiB mapped, 0 B resident\n$"
+    LABELS e2e)
+lxe_add_test(e2e.cli.print_maps_of_fixture_with_smaps
+    COMMAND linux-explorer --print-maps 100 --proc-root "${LXE_FIXTURES_DIR}/proc"
+    PASS_REGEX "^Address +Size +Rss Perms Offset +Path\n0000558367a0a000 +196\\.0 KiB +196\\.0 KiB r--p +00000000 /usr/bin/bash\n.*33 mappings, [0-9.]+ MiB mapped, [0-9.]+ MiB resident\n$"
     LABELS e2e)
 lxe_add_test(e2e.cli.print_maps_of_itself COMMAND linux-explorer --print-maps self
-    PASS_REGEX "r-xp +[0-9a-f]+ .*linux-explorer\n.*\\[stack\\]\n.*[0-9]+ mappings, " LABELS e2e)
+    PASS_REGEX "r-xp +[0-9a-f]+ .*linux-explorer\n.*\\[stack\\]\n.*[0-9]+ mappings, .* resident" LABELS e2e)
 lxe_add_test(e2e.cli.print_maps_rejects_bad_pid COMMAND linux-explorer --print-maps abc
     PASS_REGEX "'abc' is not a process id" LABELS e2e)
 lxe_add_test(e2e.cli.print_maps_of_missing_process

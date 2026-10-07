@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <string>
 
 namespace lxe::app {
 
@@ -17,6 +18,9 @@ struct Options
     std::optional<std::filesystem::path> screenshot;
     /// Process selected when the window opens.
     std::optional<ProcessId> selected;
+    /// Mapping of that process selected when the window opens: a start address in hex, or a
+    /// path as the maps list shows it (e.g. "[heap]").
+    std::optional<std::string> selected_mapping;
 };
 
 /// Opens the main window and runs until it is closed. Returns the process exit code.

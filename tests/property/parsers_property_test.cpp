@@ -48,7 +48,7 @@ public:
         std::string out(number<std::size_t>(0, max_length), '\0');
         for (char& c : out) {
             // Mostly characters that matter to the parsers, sometimes any byte.
-            c = number(0, 3) == 0 ? static_cast<char>(number<int>(-128, 127)) : pick(" ()\n\t:0123456789abcdef-SRZrwxps\0kB[]/");
+            c = number(0, 3) == 0 ? static_cast<char>(number<int>(-128, 127)) : pick(" ()\n\t:0123456789abcdef-SRZrwxps\0kB[]/VmFlagsRsPT");
         }
         return out;
     }
@@ -165,6 +165,41 @@ TEST_CASE("proc.parse_maps.round_trips_generated_lines")
     }
 }
 
+TEST_CASE("proc.parse_smaps.round_trips_generated_blocks")
+{
+    Generator gen;
+    for (int i = 0; i < iterations / 4; ++i) {
+        std::vector<lxe::proc::SmapsEntry> expected(gen.number<std::size_t>(0, 4));
+        std::string text;
+        for (auto& entry : expected) {
+            entry.mapping.start = gen.number<std::uint64_t>(0, 1U << 20U) * 4096;
+            entry.mapping.end = entry.mapping.start + gen.number<std::uint64_t>(0, 1U << 20U) * 4096;
+            entry.mapping.readable = true;
+            entry.mapping.path = gen.number(0, 1) == 0 ? std::string{} : "/lib/x y.so";
+            auto& st = entry.stats;
+            st.size = gen.number<std::uint64_t>(0, 1U << 30U) * 1024;
+            st.rss = gen.number<std::uint64_t>(0, 1U << 20U) * 1024;
+            st.pss = gen.number<std::uint64_t>(0, 1U << 20U) * 1024;
+            st.swap = gen.number<std::uint64_t>(0, 1U << 10U) * 1024;
+            st.thp_eligible = gen.number(0, 1) == 1;
+            st.vm_flags = {"rd", "mr"};
+            if (gen.number(0, 1) == 1) {
+                st.vm_flags.push_back("sd");
+            }
+            text += std::format("{:x}-{:x} r--p 00000000 00:00 0 {}\n", entry.mapping.start, entry.mapping.end, entry.mapping.path);
+            text += std::format("Size: {} kB\nRss:  {} kB\nPss: {} kB\nSwap: {} kB\nSomethingNew: 7 kB\nTHPeligible: {}\nVmFlags: ", st.size / 1024, st.rss / 1024, st.pss / 1024, st.swap / 1024, st.thp_eligible ? 1 : 0);
+            for (const auto& flag : st.vm_flags) {
+                text += flag + ' ';
+            }
+            text += '\n';
+        }
+        INFO("text: " << text);
+        const auto parsed = lxe::proc::parse_smaps(text);
+        REQUIRE(parsed.has_value());
+        REQUIRE(*parsed == expected);
+    }
+}
+
 TEST_CASE("proc.parsers.survive_arbitrary_bytes")
 {
     Generator gen;
@@ -180,6 +215,11 @@ TEST_CASE("proc.parsers.survive_arbitrary_bytes")
         std::ignore = lxe::proc::parse_cpu_times(input);
         std::ignore = lxe::proc::parse_meminfo(input);
         std::ignore = lxe::proc::parse_pid(input);
+        if (const auto smaps = lxe::proc::parse_smaps(input)) {
+            for (const auto& entry : *smaps) {
+                CHECK(entry.mapping.end >= entry.mapping.start);
+            }
+        }
         if (const auto maps = lxe::proc::parse_maps(input)) {
             for (const auto& m : *maps) {
                 CHECK(m.end >= m.start);

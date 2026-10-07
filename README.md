@@ -6,9 +6,10 @@ into threads, file descriptors, memory maps, sockets and environment. Data comes
 `/proc`; the UI is Dear ImGui on SDL3 + OpenGL.
 
 Status: early. Today it shows the process tree with PID, user, CPU %, memory, threads, state
-and command line, refreshing every second, and the memory maps of the selected process in a
-lower pane, in a light or dark theme that follows the desktop. See `CLAUDE.md` for goals, rules
-and roadmap.
+and command line, refreshing every second; the memory maps of the selected process in a lower
+pane with their page accounting; and for a selected mapping, which of its pages are resident,
+swapped or absent, in a light or dark theme that follows the desktop. See `CLAUDE.md` for
+goals, rules and roadmap.
 
 ## Build
 
@@ -31,13 +32,15 @@ linux-explorer                       the window
 linux-explorer --print-tree          process tree as text, like pstree
 linux-explorer --print-maps PID      memory maps of a process as text, like pmap ("self" works)
 linux-explorer --select PID          open with that process selected
+linux-explorer --select-mapping M    ... and mapping M of it (hex address or a path like "[heap]")
 linux-explorer --theme dark          force a theme (default: follow the desktop)
 linux-explorer --screenshot x.ppm    render the window to a file and exit
 linux-explorer --proc-root DIR       read a recorded /proc tree instead of the live one
 ```
 
 In the window: click a process to see its memory maps in the lower pane (**Ctrl+M** shows or
-hides it, drag the divider to resize). **Space** pauses/resumes live updates, **F5** refreshes,
+hides it, drag the divider to resize); click a mapping to see its pages on the right. Only your
+own processes can be inspected unless you run as root. **Space** pauses/resumes live updates, **F5** refreshes,
 arrows and double-click expand/collapse nodes, columns can be resized, reordered and hidden
 (right-click the header; the maps pane has end address, device and inode columns hidden by
 default). Column layout is remembered in `~/.local/share/linux-explorer/`.

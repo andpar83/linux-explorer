@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <charconv>
 #include <chrono>
 #include <climits>
 #include <cstdio>
@@ -192,6 +193,23 @@ struct Fonts
     return file.good();
 }
 
+/// The start address of the mapping `wanted` names (hex address or path), if listed.
+[[nodiscard]] std::optional<std::uint64_t> find_mapping(const model::ProcessDetails& details, std::string_view wanted)
+{
+    for (const auto& info : details.maps) {
+        if (info.mapping.path == wanted) {
+            return info.mapping.start;
+        }
+    }
+    std::uint64_t address = 0;
+    const char* const last = std::to_address(wanted.end());
+    constexpr int hex = 16;
+    if (const auto [end, error] = std::from_chars(wanted.data(), last, address, hex); error == std::errc{} && end == last) {
+        return address;
+    }
+    return std::nullopt;
+}
+
 /// Where ImGui keeps column widths and order between runs (~/.local/share/linux-explorer/).
 [[nodiscard]] std::string settings_path()
 {
@@ -278,12 +296,18 @@ int run(const proc::ProcFs& fs, const Options& options)
     }
     const util::ScopeExit shutdown_renderer{[] { ImGui_ImplOpenGL3_Shutdown(); }};
 
-    model::Sampler sampler{sys::page_size()};
+    const std::uint64_t page_bytes = sys::page_size();
+    model::Sampler sampler{page_bytes};
     model::Model model;
     model::ProcessDetails details;
     ui::ViewState state{.paused = false, .selected = options.selected};
-    // Details are read only while the pane is visible; the pane shows what `details.pid` says.
-    const auto wanted_details = [&] { return state.show_details ? state.selected : std::nullopt; };
+    // Details are read only while the pane is visible; the pane shows what `details` says.
+    const auto wanted_details = [&] {
+        return model::DetailsRequest{
+            .pid = state.show_details ? state.selected : std::nullopt,
+            .mapping = state.show_details ? state.selected_mapping : std::nullopt,
+        };
+    };
     const auto refresh = [&] {
         if (auto snapshot = fs.read_snapshot()) {
             model = sampler.update(*snapshot);
@@ -291,9 +315,13 @@ int run(const proc::ProcFs& fs, const Options& options)
         else {
             std::println(stderr, "linux-explorer: cannot read {}: {}", fs.root().string(), snapshot.error().message());
         }
-        details = model::load_details(fs, wanted_details());
+        details = model::load_details(fs, wanted_details(), page_bytes);
     };
     refresh();
+    if (options.selected_mapping) {
+        state.selected_mapping = find_mapping(details, *options.selected_mapping);
+        details = model::load_details(fs, wanted_details(), page_bytes);
+    }
 
     auto next_refresh = Clock::now() + refresh_interval;
     auto active_until = Clock::now() + active_period;
@@ -341,8 +369,8 @@ int run(const proc::ProcFs& fs, const Options& options)
         ImGui::NewFrame();
         const ui::FrameRequests requests = ui::draw_main_window(model, details, state, config);
         ImGui::Render();
-        if (details.pid != wanted_details()) {
-            details = model::load_details(fs, wanted_details()); // selection changed: show it right away
+        if (const auto wanted = wanted_details(); details.pid != wanted.pid || details.selected_mapping != wanted.mapping) {
+            details = model::load_details(fs, wanted, page_bytes); // selection changed: show it right away
         }
 
         int pixel_width = 0;

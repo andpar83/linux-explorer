@@ -1,10 +1,14 @@
 // Micro-benchmarks of the hot paths. Not part of the default test run (label "bench"):
 //   ctest --test-dir build/release -L bench --output-on-failure
 //   ./build/release/tests/bench_tests          (full sampling)
+#include "lxe/model/details.hpp"
 #include "lxe/model/sampler.hpp"
 #include "lxe/model/text_tree.hpp"
 #include "lxe/proc/proc_fs.hpp"
+#include "lxe/sys/file.hpp"
 #include "lxe/sys/system.hpp"
+
+#include <unistd.h>
 
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -13,6 +17,7 @@
 #include <format>
 #include <string>
 #include <string_view>
+#include <vector>
 
 TEST_CASE("proc.read_snapshot")
 {
@@ -49,6 +54,25 @@ TEST_CASE("proc.parse_maps")
     BENCHMARK("parse_maps (20k lines)")
     {
         return lxe::proc::parse_maps(text);
+    };
+}
+
+TEST_CASE("proc.parse_smaps_and_pages")
+{
+    const auto smaps = lxe::proc::ProcFs{}.read_smaps(lxe::ProcessId{::getpid()});
+    REQUIRE(smaps.has_value());
+    const std::string text = lxe::sys::read_file("/proc/self/smaps").value();
+    BENCHMARK("parse_smaps (this process)")
+    {
+        return lxe::proc::parse_smaps(text);
+    };
+    std::vector<std::uint64_t> entries(262'144);
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+        entries[i] = (i % 3 == 0) ? (std::uint64_t{1} << 63U) | (std::uint64_t{1} << 56U) : 0;
+    }
+    BENCHMARK("summarize_pages (256k entries)")
+    {
+        return lxe::model::summarize_pages(entries, 4096, entries.size(), 512);
     };
 }
 

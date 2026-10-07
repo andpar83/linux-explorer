@@ -1,0 +1,5 @@
+00400000-00401000 r-xp 00000000 00:00 0 [a]
+Rss: 4 kB
+Future: 1 kB
+THPeligible: 1
+VmFlags: rd ex

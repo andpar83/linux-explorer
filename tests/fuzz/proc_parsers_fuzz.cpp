@@ -22,6 +22,13 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     std::ignore = lxe::proc::parse_cpu_times(text);
     std::ignore = lxe::proc::parse_meminfo(text);
     std::ignore = lxe::proc::parse_pid(text);
+    if (const auto smaps = lxe::proc::parse_smaps(text)) {
+        for (const auto& entry : *smaps) {
+            if (entry.mapping.end < entry.mapping.start) {
+                __builtin_trap();
+            }
+        }
+    }
     if (const auto maps = lxe::proc::parse_maps(text)) {
         for (const auto& mapping : *maps) {
             if (mapping.end < mapping.start || text.find(mapping.path) == std::string_view::npos) {

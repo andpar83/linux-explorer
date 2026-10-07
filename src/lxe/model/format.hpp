@@ -25,4 +25,8 @@ namespace lxe::model {
 /// "r-xp", as /proc/<pid>/maps writes it.
 [[nodiscard]] std::string format_permissions(const proc::MemoryMapping& mapping);
 
+/// Meaning of a two-letter VmFlags code from /proc/<pid>/smaps ("rd" -> "readable"); the code
+/// itself when unknown.
+[[nodiscard]] std::string_view vm_flag_description(std::string_view code) noexcept;
+
 } // namespace lxe::model

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lxe/ids.hpp"
+#include "lxe/model/details.hpp"
 #include "lxe/model/process_model.hpp"
 #include "lxe/proc/proc_fs.hpp"
 #include "lxe/sys/users.hpp"
@@ -108,6 +109,24 @@ inline proc::MemoryMapping mapping(
         .inode = path.starts_with('/') ? 49414585U : 0U,
         .path = std::move(path),
     };
+}
+
+/// A mapping without page accounting, as the details hold it.
+inline model::MappingInfo info(proc::MemoryMapping mapping)
+{
+    return model::MappingInfo{.mapping = std::move(mapping), .stats = std::nullopt};
+}
+
+/// A pagemap entry with the given flags.
+inline std::uint64_t pagemap_entry(bool present, bool swapped = false, bool exclusive = false, bool file_or_shared = false, bool soft_dirty = false)
+{
+    std::uint64_t entry = 0;
+    entry |= present ? std::uint64_t{1} << 63U : 0;
+    entry |= swapped ? std::uint64_t{1} << 62U : 0;
+    entry |= file_or_shared ? std::uint64_t{1} << 61U : 0;
+    entry |= exclusive ? std::uint64_t{1} << 56U : 0;
+    entry |= soft_dirty ? std::uint64_t{1} << 55U : 0;
+    return entry;
 }
 
 /// User database stand-in: root and alice exist, everyone else is unknown.

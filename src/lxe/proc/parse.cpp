@@ -8,6 +8,7 @@
 #include <memory>
 #include <ranges>
 #include <span>
+#include <utility>
 
 namespace lxe::proc {
 namespace {
@@ -300,65 +301,168 @@ std::expected<MemoryInfo, std::error_code> parse_meminfo(std::string_view text)
     return MemoryInfo{.total_bytes = **total, .available_bytes = **available};
 }
 
-std::expected<std::vector<MemoryMapping>, std::error_code> parse_maps(std::string_view text)
+std::expected<MemoryMapping, std::error_code> parse_maps_line(std::string_view line)
 {
     constexpr int hex = 16;
+    // "start-end perms offset major:minor inode   path"
+    std::string_view rest = line;
+    const auto range = take_field(rest);
+    const auto perms = take_field(rest);
+    const auto offset = take_field(rest);
+    const auto device = take_field(rest);
+    const auto inode = take_field(rest);
+    if (!inode) {
+        return fail(ParseError::truncated);
+    }
+    const auto dash = range->find('-');
+    const auto colon = device->find(':');
+    if (dash == std::string_view::npos || colon == std::string_view::npos || perms->size() != 4) {
+        return fail(ParseError::malformed);
+    }
+    const auto start = to_number<std::uint64_t>(range->substr(0, dash), hex);
+    const auto end = to_number<std::uint64_t>(range->substr(dash + 1), hex);
+    const auto file_offset = to_number<std::uint64_t>(*offset, hex);
+    const auto major = to_number<std::uint32_t>(device->substr(0, colon), hex);
+    const auto minor = to_number<std::uint32_t>(device->substr(colon + 1), hex);
+    const auto inode_number = to_number<std::uint64_t>(*inode);
+    if (!start || !end || !file_offset || !major || !minor || !inode_number) {
+        return fail(ParseError::bad_number);
+    }
+    const auto readable = permission_flag((*perms)[0], 'r');
+    const auto writable = permission_flag((*perms)[1], 'w');
+    const auto executable = permission_flag((*perms)[2], 'x');
+    const char sharing = (*perms)[3];
+    if (*end < *start || !readable || !writable || !executable || (sharing != 'p' && sharing != 's')) {
+        return fail(ParseError::malformed);
+    }
+    MemoryMapping mapping{
+        .start = *start,
+        .end = *end,
+        .readable = *readable,
+        .writable = *writable,
+        .executable = *executable,
+        .shared = sharing == 's',
+        .offset = *file_offset,
+        .device_major = *major,
+        .device_minor = *minor,
+        .inode = *inode_number,
+        .path = {},
+    };
+    // The path follows the inode's column padding and runs to the end of the line.
+    if (const auto path_start = rest.find_first_not_of(" \t"); path_start != std::string_view::npos) {
+        mapping.path = std::string{rest.substr(path_start)};
+    }
+    return mapping;
+}
+
+std::expected<std::vector<MemoryMapping>, std::error_code> parse_maps(std::string_view text)
+{
     std::vector<MemoryMapping> mappings;
     for (const std::string_view line : lines(text)) {
         if (line.find_first_not_of(" \t") == std::string_view::npos) {
             continue;
         }
-        // "start-end perms offset major:minor inode   path"
-        std::string_view rest = line;
-        const auto range = take_field(rest);
-        const auto perms = take_field(rest);
-        const auto offset = take_field(rest);
-        const auto device = take_field(rest);
-        const auto inode = take_field(rest);
-        if (!inode) {
-            return fail(ParseError::truncated);
+        auto mapping = parse_maps_line(line);
+        if (!mapping) {
+            return std::unexpected{mapping.error()};
         }
-        const auto dash = range->find('-');
-        const auto colon = device->find(':');
-        if (dash == std::string_view::npos || colon == std::string_view::npos || perms->size() != 4) {
-            return fail(ParseError::malformed);
-        }
-        const auto start = to_number<std::uint64_t>(range->substr(0, dash), hex);
-        const auto end = to_number<std::uint64_t>(range->substr(dash + 1), hex);
-        const auto file_offset = to_number<std::uint64_t>(*offset, hex);
-        const auto major = to_number<std::uint32_t>(device->substr(0, colon), hex);
-        const auto minor = to_number<std::uint32_t>(device->substr(colon + 1), hex);
-        const auto inode_number = to_number<std::uint64_t>(*inode);
-        if (!start || !end || !file_offset || !major || !minor || !inode_number) {
-            return fail(ParseError::bad_number);
-        }
-        const auto readable = permission_flag((*perms)[0], 'r');
-        const auto writable = permission_flag((*perms)[1], 'w');
-        const auto executable = permission_flag((*perms)[2], 'x');
-        const char sharing = (*perms)[3];
-        if (*end < *start || !readable || !writable || !executable || (sharing != 'p' && sharing != 's')) {
-            return fail(ParseError::malformed);
-        }
-        MemoryMapping mapping{
-            .start = *start,
-            .end = *end,
-            .readable = *readable,
-            .writable = *writable,
-            .executable = *executable,
-            .shared = sharing == 's',
-            .offset = *file_offset,
-            .device_major = *major,
-            .device_minor = *minor,
-            .inode = *inode_number,
-            .path = {},
-        };
-        // The path follows the inode's column padding and runs to the end of the line.
-        if (const auto path_start = rest.find_first_not_of(" \t"); path_start != std::string_view::npos) {
-            mapping.path = std::string{rest.substr(path_start)};
-        }
-        mappings.push_back(std::move(mapping));
+        mappings.push_back(std::move(*mapping));
     }
     return mappings;
+}
+
+namespace {
+
+/// Where a "Key:" line of smaps lands in MappingStats; nullptr for keys we don't keep.
+[[nodiscard]] std::uint64_t MappingStats::* smaps_field(std::string_view key) noexcept
+{
+    using namespace std::string_view_literals;
+    constexpr std::array fields{
+        std::pair{"Size:"sv, &MappingStats::size},
+        std::pair{"KernelPageSize:"sv, &MappingStats::kernel_page_size},
+        std::pair{"MMUPageSize:"sv, &MappingStats::mmu_page_size},
+        std::pair{"Rss:"sv, &MappingStats::rss},
+        std::pair{"Pss:"sv, &MappingStats::pss},
+        std::pair{"Pss_Dirty:"sv, &MappingStats::pss_dirty},
+        std::pair{"Shared_Clean:"sv, &MappingStats::shared_clean},
+        std::pair{"Shared_Dirty:"sv, &MappingStats::shared_dirty},
+        std::pair{"Private_Clean:"sv, &MappingStats::private_clean},
+        std::pair{"Private_Dirty:"sv, &MappingStats::private_dirty},
+        std::pair{"Referenced:"sv, &MappingStats::referenced},
+        std::pair{"Anonymous:"sv, &MappingStats::anonymous},
+        std::pair{"KSM:"sv, &MappingStats::ksm},
+        std::pair{"LazyFree:"sv, &MappingStats::lazy_free},
+        std::pair{"AnonHugePages:"sv, &MappingStats::anon_huge_pages},
+        std::pair{"ShmemPmdMapped:"sv, &MappingStats::shmem_pmd_mapped},
+        std::pair{"FilePmdMapped:"sv, &MappingStats::file_pmd_mapped},
+        std::pair{"Shared_Hugetlb:"sv, &MappingStats::shared_hugetlb},
+        std::pair{"Private_Hugetlb:"sv, &MappingStats::private_hugetlb},
+        std::pair{"Swap:"sv, &MappingStats::swap},
+        std::pair{"SwapPss:"sv, &MappingStats::swap_pss},
+        std::pair{"Locked:"sv, &MappingStats::locked},
+    };
+    for (const auto& [name, field] : fields) {
+        if (name == key) {
+            return field;
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
+std::expected<std::vector<SmapsEntry>, std::error_code> parse_smaps(std::string_view text)
+{
+    constexpr std::uint64_t bytes_per_kib = 1024;
+    std::vector<SmapsEntry> entries;
+    for (const std::string_view line : lines(text)) {
+        std::string_view rest = line;
+        const auto first = take_field(rest);
+        if (!first) {
+            continue; // blank line
+        }
+        if (!first->ends_with(':')) {
+            auto mapping = parse_maps_line(line);
+            if (!mapping) {
+                return std::unexpected{mapping.error()};
+            }
+            entries.push_back(SmapsEntry{.mapping = std::move(*mapping), .stats = {}});
+            continue;
+        }
+        if (entries.empty()) {
+            return fail(ParseError::malformed); // accounting before any mapping
+        }
+        MappingStats& stats = entries.back().stats;
+        if (*first == "VmFlags:") {
+            while (const auto flag = take_field(rest)) {
+                stats.vm_flags.emplace_back(*flag);
+            }
+        }
+        else if (*first == "THPeligible:") {
+            const auto value = take_field(rest).and_then([](std::string_view v) { return to_number<int>(v); });
+            if (!value || (*value != 0 && *value != 1)) {
+                return fail(ParseError::bad_number);
+            }
+            stats.thp_eligible = *value == 1;
+        }
+        else if (const auto field = smaps_field(*first); field != nullptr) {
+            const auto value = take_field(rest);
+            const auto unit = take_field(rest);
+            if (!value || !unit) {
+                return fail(ParseError::truncated);
+            }
+            if (*unit != "kB") {
+                return fail(ParseError::malformed);
+            }
+            const auto kib = to_number<std::uint64_t>(*value);
+            if (!kib || *kib > std::numeric_limits<std::uint64_t>::max() / bytes_per_kib) {
+                return fail(ParseError::bad_number);
+            }
+            stats.*field = *kib * bytes_per_kib;
+        }
+        // Unknown keys: newer kernels add some; ignore them.
+    }
+    return entries;
 }
 
 } // namespace lxe::proc

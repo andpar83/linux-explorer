@@ -141,8 +141,83 @@ struct MemoryMapping
 /// Parses /proc/meminfo. Falls back to MemFree on kernels without MemAvailable.
 [[nodiscard]] std::expected<MemoryInfo, std::error_code> parse_meminfo(std::string_view text);
 
+/// Parses one line of /proc/<pid>/maps (also the header line of each /proc/<pid>/smaps block).
+[[nodiscard]] std::expected<MemoryMapping, std::error_code> parse_maps_line(std::string_view line);
+
 /// Parses /proc/<pid>/maps, in file order. A path may contain spaces; a malformed line fails the
 /// whole result.
 [[nodiscard]] std::expected<std::vector<MemoryMapping>, std::error_code> parse_maps(std::string_view text);
+
+/// Per-mapping page accounting from /proc/<pid>/smaps. All sizes in bytes. Keys this kernel
+/// doesn't report stay 0; keys this struct doesn't know are ignored.
+struct MappingStats
+{
+    std::uint64_t size = 0;
+    std::uint64_t kernel_page_size = 0;
+    std::uint64_t mmu_page_size = 0;
+    std::uint64_t rss = 0;
+    std::uint64_t pss = 0;
+    std::uint64_t pss_dirty = 0;
+    std::uint64_t shared_clean = 0;
+    std::uint64_t shared_dirty = 0;
+    std::uint64_t private_clean = 0;
+    std::uint64_t private_dirty = 0;
+    std::uint64_t referenced = 0;
+    std::uint64_t anonymous = 0;
+    std::uint64_t ksm = 0;
+    std::uint64_t lazy_free = 0;
+    std::uint64_t anon_huge_pages = 0;
+    std::uint64_t shmem_pmd_mapped = 0;
+    std::uint64_t file_pmd_mapped = 0;
+    std::uint64_t shared_hugetlb = 0;
+    std::uint64_t private_hugetlb = 0;
+    std::uint64_t swap = 0;
+    std::uint64_t swap_pss = 0;
+    std::uint64_t locked = 0;
+    bool thp_eligible = false;
+    std::vector<std::string> vm_flags; ///< Two-letter codes as in the VmFlags line, e.g. "rd", "ex", "sd".
+
+    friend bool operator==(const MappingStats&, const MappingStats&) = default;
+};
+
+/// One block of /proc/<pid>/smaps: a mapping and its page accounting.
+struct SmapsEntry
+{
+    MemoryMapping mapping;
+    MappingStats stats;
+
+    friend bool operator==(const SmapsEntry&, const SmapsEntry&) = default;
+};
+
+/// Parses /proc/<pid>/smaps. A stats line before any mapping header, or a known key with a bad
+/// value, fails the whole result.
+[[nodiscard]] std::expected<std::vector<SmapsEntry>, std::error_code> parse_smaps(std::string_view text);
+
+/// Flags of one virtual page, decoded from a /proc/<pid>/pagemap entry.
+struct PageFlags
+{
+    bool present = false;
+    bool swapped = false;
+    bool file_or_shared = false; ///< File-backed or shared anonymous (bit 61); set only when present or swapped.
+    bool exclusive = false;      ///< Mapped by this process only (bit 56).
+    bool soft_dirty = false;     ///< Written since soft-dirty tracking was cleared (bit 55).
+};
+
+[[nodiscard]] constexpr PageFlags decode_pagemap(std::uint64_t entry) noexcept
+{
+    constexpr unsigned present_bit = 63;
+    constexpr unsigned swapped_bit = 62;
+    constexpr unsigned file_or_shared_bit = 61;
+    constexpr unsigned exclusive_bit = 56;
+    constexpr unsigned soft_dirty_bit = 55;
+    const auto bit = [entry](unsigned n) { return ((entry >> n) & 1U) != 0; };
+    return PageFlags{
+        .present = bit(present_bit),
+        .swapped = bit(swapped_bit),
+        .file_or_shared = bit(file_or_shared_bit),
+        .exclusive = bit(exclusive_bit),
+        .soft_dirty = bit(soft_dirty_bit),
+    };
+}
 
 } // namespace lxe::proc

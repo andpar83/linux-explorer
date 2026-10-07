@@ -67,6 +67,9 @@ Palette set_light_colors(ImGuiStyle& style)
         .kernel_thread_text = ImVec4{0.47F, 0.47F, 0.52F, 1.00F},
         .muted_text = ImVec4{0.33F, 0.33F, 0.38F, 1.00F},
         .accent_text = ImVec4{0.80F, 0.38F, 0.00F, 1.00F},
+        .page_present = rgba(66, 133, 244, 255),
+        .page_swapped = rgba(240, 150, 30, 255),
+        .page_absent = rgba(220, 220, 226, 255),
     };
 }
 
@@ -101,6 +104,9 @@ Palette set_dark_colors(ImGuiStyle& style)
         .kernel_thread_text = ImVec4{0.56F, 0.56F, 0.61F, 1.00F},
         .muted_text = ImVec4{0.66F, 0.66F, 0.71F, 1.00F},
         .accent_text = ImVec4{1.00F, 0.70F, 0.30F, 1.00F},
+        .page_present = rgba(90, 150, 240, 255),
+        .page_swapped = rgba(240, 160, 50, 255),
+        .page_absent = rgba(50, 50, 56, 255),
     };
 }
 

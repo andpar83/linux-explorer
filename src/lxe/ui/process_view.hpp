@@ -7,6 +7,7 @@
 
 #include <imgui.h>
 
+#include <cstdint>
 #include <optional>
 
 namespace lxe::ui {
@@ -26,6 +27,7 @@ struct ViewState
     ExpandRequest expand = ExpandRequest::none; ///< Applied to every tree node on the next frame.
     bool show_details = true;                   ///< Lower pane with the selected process's memory maps.
     float details_height = 0.0F;                ///< Lower pane height in pixels; 0 = a third of the window.
+    std::optional<std::uint64_t> selected_mapping; ///< Start address of the mapping whose pages are shown.
 };
 
 /// Fixed inputs of the view.
