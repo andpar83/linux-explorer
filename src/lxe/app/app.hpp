@@ -15,6 +15,8 @@ struct Options
     /// Render a few frames, save the window contents to this file (binary PPM) and exit.
     /// For checking the UI from scripts and tests.
     std::optional<std::filesystem::path> screenshot;
+    /// Process selected when the window opens.
+    std::optional<ProcessId> selected;
 };
 
 /// Opens the main window and runs until it is closed. Returns the process exit code.

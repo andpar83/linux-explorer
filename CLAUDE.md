@@ -24,12 +24,17 @@ Done: a `pstree`-style live tree in a window. Columns: process, PID, user, CPU %
 threads, state, command line; resizable/reorderable/hideable columns; expand/collapse; pause;
 refresh every second only while unpaused; own processes tinted; kernel threads dimmed; CPU
 heat-map cell; tooltip with the full command line; light/dark theme following the desktop;
-status bar with CPU %, memory, process and thread counts. CLI: `--print-tree` (text tree),
+status bar with CPU %, memory, process and thread counts. A lower pane (Ctrl+M, draggable
+splitter) shows the selected process's memory maps from `/proc/<pid>/maps`: address, size,
+permissions, offset, path, with end address, device and inode as hidden-by-default columns;
+clear messages for another user's process (permission denied) or an exited one. CLI:
+`--print-tree` (text tree), `--print-maps PID|self` (text table), `--select PID|self`,
 `--proc-root DIR` (fixtures), `--theme light|dark`, `--screenshot FILE`.
 
-Next steps (in order, subject to change): search/filter box; sort by column; a details pane
-for the selected process (threads, fds, maps, environment); CPU/memory history graphs
-(ImPlot); kill/renice with confirmation; per-process icons; services/new/exiting colouring.
+Next steps (in order, subject to change): full executable names where the kernel truncated
+the 15-byte name; search/filter box; sort by column; more detail tabs for the selected process
+(threads, open files, environment); CPU/memory history graphs (ImPlot); kill/renice with
+confirmation; per-process icons; services/new/exiting colouring.
 
 ## UI stack: Dear ImGui + SDL3 + OpenGL 3
 
@@ -54,6 +59,12 @@ plain functions. What to know when touching UI code:
   includes so their warnings don't apply to us.
 - **Headless tests**: `tests/support/headless_imgui.hpp` runs real view code through ImGui's
   null backend (no window, no GPU). Set a small display size to exercise clipping.
+- **Long flat lists** go through `ImGuiListClipper` (only visible rows are submitted); trees
+  can't be clipped that way, they use the nesting cap above.
+- **Panes**: the lower pane is a child window of fixed height so the status bar never moves;
+  the splitter is an `InvisibleButton` whose drag delta changes `ViewState::details_height`.
+- **Details loading** (`app.cpp`): `model::load_details` runs on every refresh and immediately
+  when the selection changes; nothing is read while the pane is hidden.
 - **Looking at it**: `linux-explorer --screenshot /tmp/x.ppm [--theme dark]` renders a few
   frames to a PPM and exits. Convert with Python PIL if a PNG is needed.
 - Settings (column widths/order) persist in `~/.local/share/linux-explorer/imgui.ini`.
@@ -135,7 +146,8 @@ ctest --preset asan -L unit                        # one category: unit, integra
 ctest --preset release -L bench                    # benchmarks (excluded from the default run)
 ./build/asan/src/linux-explorer                    # the window, under sanitizers
 ./build/release/src/linux-explorer --print-tree    # text tree
-./build/release/src/linux-explorer --screenshot /tmp/lxe.ppm --theme dark
+./build/release/src/linux-explorer --print-maps self
+./build/release/src/linux-explorer --select self --screenshot /tmp/lxe.ppm --theme dark
 ```
 
 ### CLion
@@ -217,7 +229,7 @@ sanitizer preset. Helpers live in `tests/support/`; fixtures in `tests/fixtures/
 | `unit` | One function/class in isolation: `/proc` parsers fed strings, tree building, CPU sampling arithmetic, formatting, strong types. | Catch2 (`tests/unit/`), registered via `lxe_add_catch_tests`. |
 | `integration` | Several components against real but controlled input: the fixture `/proc` tree, the live `/proc` of the test process itself (own PID, threads, fds are deterministic), real files. | Catch2 (`tests/integration/`). |
 | `property` | Generated inputs: round trips of valid `/proc` content, random parent links, arbitrary bytes into every parser. Seeded by Catch2 (`--rng-seed` reproduces). | Catch2 (`tests/property/`). |
-| `ui` | The real view code driven headlessly through ImGui's null backend: themes, shortcuts, expand/collapse, empty/deep/clipped trees. | Catch2 + `tests/support/headless_imgui.hpp` (`tests/ui/`). |
+| `ui` | The real view code driven headlessly through ImGui's null backend: themes, shortcuts, expand/collapse, empty/deep/clipped trees, the details pane in every state. | Catch2 + `tests/support/headless_imgui.hpp` (`tests/ui/`). |
 | `fuzz` | A libFuzzer harness per untrusted-input parser (`tests/fuzz/*_fuzz.cpp`). Without Clang it is linked to `replay_main.cpp` and replays `tests/fuzz/corpus/*` as a test; add a corpus file for every crash or odd input found. | `fuzz_proc_parsers` target. |
 | `e2e` | The real `linux-explorer` binary: CLI options, text tree of the fixture, text tree of the live system. | `lxe_add_test()` in `tests/CMakeLists.txt`. |
 | `bench` | Micro-benchmarks of hot paths (`/proc` scan, `parse_stat`, sampling, text tree). Built everywhere, run only with `-L bench`. | Catch2 `BENCHMARK` (`tests/bench/`). |
@@ -261,7 +273,7 @@ src/sanitizer_defaults.cpp   sanitizer runtime options + suppressions, compiled 
 src/lxe/ids.hpp         ProcessId, UserId
 src/lxe/sys/            Linux primitives: UniqueFd, read_file, users, page size
 src/lxe/proc/           /proc parsers (parse.*) and the ProcFs reader (proc_fs.*)
-src/lxe/model/          ProcessEntry/ProcessTree/Model, Sampler (CPU deltas), formatting, text tree
+src/lxe/model/          ProcessEntry/ProcessTree/Model, Sampler (CPU deltas), ProcessDetails (maps), formatting, text output
 src/lxe/ui/             theme (palettes, style) and process_view (the main window)
 src/lxe/app/            SDL3 window, OpenGL context, render loop, fonts, screenshot
 src/lxe/util/           ScopeExit

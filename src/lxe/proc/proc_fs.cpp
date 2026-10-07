@@ -11,6 +11,8 @@ namespace {
 
 /// Cap for cmdline: argument lists can be megabytes, and only the start is ever displayed.
 constexpr std::size_t cmdline_read_limit = 64 * 1024;
+/// Cap for maps: a browser's tens of thousands of mappings are a few megabytes of text.
+constexpr std::size_t maps_read_limit = 64 * 1024 * 1024;
 
 } // namespace
 
@@ -58,6 +60,11 @@ std::expected<ProcessInfo, std::error_code> ProcFs::read_process(ProcessId pid) 
         info.command_line = parse_cmdline(*cmdline);
     }
     return info;
+}
+
+std::expected<std::vector<MemoryMapping>, std::error_code> ProcFs::read_maps(ProcessId pid) const
+{
+    return sys::read_file(root_ / std::format("{}", pid) / "maps", maps_read_limit).and_then(parse_maps);
 }
 
 std::expected<SystemInfo, std::error_code> ProcFs::read_system() const

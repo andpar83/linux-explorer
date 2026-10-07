@@ -22,4 +22,7 @@ namespace lxe::model {
 /// Arguments joined with spaces, the way a shell would show them (without quoting).
 [[nodiscard]] std::string join_command_line(std::span<const std::string> args);
 
+/// "r-xp", as /proc/<pid>/maps writes it.
+[[nodiscard]] std::string format_permissions(const proc::MemoryMapping& mapping);
+
 } // namespace lxe::model

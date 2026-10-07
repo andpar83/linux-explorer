@@ -7,9 +7,11 @@ add_library(lxe_core STATIC
     lxe/sys/users.cpp
     lxe/proc/parse.cpp
     lxe/proc/proc_fs.cpp
+    lxe/model/details.cpp
     lxe/model/format.cpp
     lxe/model/process_tree.cpp
     lxe/model/sampler.cpp
+    lxe/model/text_maps.cpp
     lxe/model/text_tree.cpp
 )
 target_include_directories(lxe_core PUBLIC

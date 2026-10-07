@@ -9,6 +9,11 @@
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstdint>
+#include <format>
+#include <string>
+#include <string_view>
+
 TEST_CASE("proc.read_snapshot")
 {
     const lxe::proc::ProcFs fs;
@@ -26,6 +31,24 @@ TEST_CASE("proc.parse_stat")
     BENCHMARK("parse_stat")
     {
         return lxe::proc::parse_stat(line);
+    };
+}
+
+TEST_CASE("proc.parse_maps")
+{
+    // 20k mappings: the order of magnitude of a big browser process.
+    std::string text;
+    for (std::uint64_t i = 0; i < 20'000; ++i) {
+        text += std::format(
+            "{:x}-{:x} r-xp {:08x} 103:03 49414585                  /usr/lib/x86_64-linux-gnu/libc.so.6\n",
+            0x7f0000000000U + i * 0x2000U,
+            0x7f0000001000U + i * 0x2000U,
+            i * 0x1000U
+        );
+    }
+    BENCHMARK("parse_maps (20k lines)")
+    {
+        return lxe::proc::parse_maps(text);
     };
 }
 

@@ -1,5 +1,6 @@
 #include "lxe/app/app.hpp"
 
+#include "lxe/model/details.hpp"
 #include "lxe/model/sampler.hpp"
 #include "lxe/sys/system.hpp"
 #include "lxe/sys/users.hpp"
@@ -55,6 +56,13 @@ constexpr std::array text_fonts{
 };
 /// Font Awesome 4 (Ubuntu package fonts-font-awesome) for toolbar icons; optional.
 constexpr const char* icon_font = "/usr/share/fonts/truetype/font-awesome/fontawesome-webfont.ttf";
+/// Monospace font for addresses and permission flags; optional.
+constexpr std::array mono_fonts{
+    "/usr/share/fonts/truetype/ubuntu/UbuntuSansMono[wght].ttf",
+    "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+};
 
 struct WindowDeleter
 {
@@ -124,20 +132,30 @@ template <class Function>
     return std::filesystem::is_regular_file(path, error);
 }
 
-/// Loads the UI font with icon glyphs merged in. Returns whether the icons are available.
-[[nodiscard]] bool load_fonts(ImGuiIO& io)
+struct Fonts
 {
+    bool icons = false;
+    ImFont* mono = nullptr;
+};
+
+/// Loads the UI font with icon glyphs merged in, and a monospace font. Both extras are optional.
+[[nodiscard]] Fonts load_fonts(ImGuiIO& io)
+{
+    Fonts fonts;
     const auto text_font = std::ranges::find_if(text_fonts, file_exists);
     if (text_font == text_fonts.end() || io.Fonts->AddFontFromFileTTF(*text_font, base_font_size) == nullptr) {
         io.Fonts->AddFontDefault();
     }
-    if (!file_exists(icon_font)) {
-        return false;
+    if (file_exists(icon_font)) {
+        ImFontConfig config;
+        config.MergeMode = true;
+        config.GlyphMinAdvanceX = base_font_size; // same width for every icon, so labels line up
+        fonts.icons = io.Fonts->AddFontFromFileTTF(icon_font, base_font_size * 0.9F, &config) != nullptr;
     }
-    ImFontConfig config;
-    config.MergeMode = true;
-    config.GlyphMinAdvanceX = base_font_size; // same width for every icon, so labels line up
-    return io.Fonts->AddFontFromFileTTF(icon_font, base_font_size * 0.9F, &config) != nullptr;
+    if (const auto mono = std::ranges::find_if(mono_fonts, file_exists); mono != mono_fonts.end()) {
+        fonts.mono = io.Fonts->AddFontFromFileTTF(*mono, base_font_size);
+    }
+    return fonts;
 }
 
 /// "Linux Explorer — user@host", like Process Explorer's "[host\user]" title.
@@ -243,8 +261,13 @@ int run(const proc::ProcFs& fs, const Options& options)
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = settings.empty() ? nullptr : settings.c_str();
 
-    ui::ViewConfig config{.current_user = sys::current_user(), .palette = {}, .icons = load_fonts(io)};
-    config.palette = ui::apply_theme(current_theme(options), scale, base_font_size);
+    const Fonts fonts = load_fonts(io);
+    ui::ViewConfig config{
+        .current_user = sys::current_user(),
+        .palette = ui::apply_theme(current_theme(options), scale, base_font_size),
+        .icons = fonts.icons,
+        .mono_font = fonts.mono,
+    };
 
     if (!ImGui_ImplSDL3_InitForOpenGL(window.get(), gl_context.get())) {
         return report_sdl_error("cannot initialise the ImGui SDL3 backend");
@@ -257,6 +280,10 @@ int run(const proc::ProcFs& fs, const Options& options)
 
     model::Sampler sampler{sys::page_size()};
     model::Model model;
+    model::ProcessDetails details;
+    ui::ViewState state{.paused = false, .selected = options.selected};
+    // Details are read only while the pane is visible; the pane shows what `details.pid` says.
+    const auto wanted_details = [&] { return state.show_details ? state.selected : std::nullopt; };
     const auto refresh = [&] {
         if (auto snapshot = fs.read_snapshot()) {
             model = sampler.update(*snapshot);
@@ -264,10 +291,10 @@ int run(const proc::ProcFs& fs, const Options& options)
         else {
             std::println(stderr, "linux-explorer: cannot read {}: {}", fs.root().string(), snapshot.error().message());
         }
+        details = model::load_details(fs, wanted_details());
     };
     refresh();
 
-    ui::ViewState state;
     auto next_refresh = Clock::now() + refresh_interval;
     auto active_until = Clock::now() + active_period;
     int frames = 0;
@@ -312,8 +339,11 @@ int run(const proc::ProcFs& fs, const Options& options)
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-        const ui::FrameRequests requests = ui::draw_main_window(model, state, config);
+        const ui::FrameRequests requests = ui::draw_main_window(model, details, state, config);
         ImGui::Render();
+        if (details.pid != wanted_details()) {
+            details = model::load_details(fs, wanted_details()); // selection changed: show it right away
+        }
 
         int pixel_width = 0;
         int pixel_height = 0;

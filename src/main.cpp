@@ -1,14 +1,18 @@
 #include "lxe/app/app.hpp"
 #include "lxe/model/sampler.hpp"
+#include "lxe/model/text_maps.hpp"
 #include "lxe/model/text_tree.hpp"
 #include "lxe/proc/proc_fs.hpp"
 #include "lxe/sys/system.hpp"
 #include "lxe/ui/theme.hpp"
 #include "lxe/version.hpp"
 
+#include <unistd.h>
+
 #include <cstdio>
 #include <exception>
 #include <filesystem>
+#include <optional>
 #include <print>
 #include <span>
 #include <string_view>
@@ -20,7 +24,9 @@ Show the running processes as a live tree in a window.
 
 Options:
       --print-tree       print the process tree as text (like pstree) and exit
+      --print-maps PID   print the memory maps of process PID ("self" for this one) and exit
       --proc-root DIR    read processes from DIR instead of /proc
+      --select PID       open with process PID ("self" for this one) selected
       --theme light|dark colour theme (default: follow the desktop setting)
       --screenshot FILE  open the window, save it to FILE (binary PPM) and exit
       --version          print the version and exit
@@ -30,9 +36,21 @@ Options:
 struct Options
 {
     bool print_tree = false;
+    std::optional<lxe::ProcessId> print_maps;
     std::filesystem::path proc_root = "/proc";
     lxe::app::Options app;
 };
+
+int print_maps(const lxe::proc::ProcFs& fs, lxe::ProcessId pid)
+{
+    const auto maps = fs.read_maps(pid);
+    if (!maps) {
+        std::println(stderr, "linux-explorer: cannot read maps of process {}: {}", pid, maps.error().message());
+        return 1;
+    }
+    std::print("{}", lxe::model::render_maps_text(*maps));
+    return 0;
+}
 
 int print_tree(const lxe::proc::ProcFs& fs)
 {
@@ -63,6 +81,16 @@ int run(std::span<char* const> args)
             options.print_tree = true;
             continue;
         }
+        if ((arg == "--print-maps" || arg == "--select") && i + 1 < args.size()) {
+            const std::string_view pid{args[++i]};
+            const auto parsed = pid == "self" ? std::optional{lxe::ProcessId{::getpid()}} : lxe::proc::parse_pid(pid);
+            if (!parsed) {
+                std::println(stderr, "linux-explorer: '{}' is not a process id", pid);
+                return 2;
+            }
+            (arg == "--select" ? options.app.selected : options.print_maps) = parsed;
+            continue;
+        }
         if (arg == "--proc-root" && i + 1 < args.size()) {
             options.proc_root = args[++i];
             continue;
@@ -90,6 +118,9 @@ int run(std::span<char* const> args)
     }
 
     const lxe::proc::ProcFs fs{options.proc_root};
+    if (options.print_maps) {
+        return print_maps(fs, *options.print_maps);
+    }
     return options.print_tree ? print_tree(fs) : lxe::app::run(fs, options.app);
 }
 

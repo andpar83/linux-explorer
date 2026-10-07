@@ -59,11 +59,11 @@ constexpr std::string_view whitespace = " \t\n";
 
 /// The whole of `text` as a number; nullopt on empty input, junk, sign mismatch or overflow.
 template <std::integral T>
-[[nodiscard]] std::optional<T> to_number(std::string_view text) noexcept
+[[nodiscard]] std::optional<T> to_number(std::string_view text, int base = 10) noexcept
 {
     T value{};
     const char* const last = std::to_address(text.end());
-    const auto [end, error] = std::from_chars(text.data(), last, value);
+    const auto [end, error] = std::from_chars(text.data(), last, value, base);
     if (text.empty() || error != std::errc{} || end != last) {
         return std::nullopt;
     }
@@ -86,6 +86,33 @@ template <std::integral T>
         return std::nullopt;
     }
     return a + b;
+}
+
+/// The next whitespace-delimited field of `rest`, consumed from it; nullopt when none is left.
+[[nodiscard]] std::optional<std::string_view> take_field(std::string_view& rest) noexcept
+{
+    const auto start = rest.find_first_not_of(" \t");
+    if (start == std::string_view::npos) {
+        rest = {};
+        return std::nullopt;
+    }
+    rest.remove_prefix(start);
+    const auto end = std::min(rest.find_first_of(" \t"), rest.size());
+    const auto field = rest.substr(0, end);
+    rest.remove_prefix(end);
+    return field;
+}
+
+/// true for `on`, false for '-', nullopt for anything else.
+[[nodiscard]] std::optional<bool> permission_flag(char c, char on) noexcept
+{
+    if (c == on) {
+        return true;
+    }
+    if (c == '-') {
+        return false;
+    }
+    return std::nullopt;
 }
 
 /// Each line of `text`, without the newline.
@@ -271,6 +298,67 @@ std::expected<MemoryInfo, std::error_code> parse_meminfo(std::string_view text)
         return fail(ParseError::missing_field);
     }
     return MemoryInfo{.total_bytes = **total, .available_bytes = **available};
+}
+
+std::expected<std::vector<MemoryMapping>, std::error_code> parse_maps(std::string_view text)
+{
+    constexpr int hex = 16;
+    std::vector<MemoryMapping> mappings;
+    for (const std::string_view line : lines(text)) {
+        if (line.find_first_not_of(" \t") == std::string_view::npos) {
+            continue;
+        }
+        // "start-end perms offset major:minor inode   path"
+        std::string_view rest = line;
+        const auto range = take_field(rest);
+        const auto perms = take_field(rest);
+        const auto offset = take_field(rest);
+        const auto device = take_field(rest);
+        const auto inode = take_field(rest);
+        if (!inode) {
+            return fail(ParseError::truncated);
+        }
+        const auto dash = range->find('-');
+        const auto colon = device->find(':');
+        if (dash == std::string_view::npos || colon == std::string_view::npos || perms->size() != 4) {
+            return fail(ParseError::malformed);
+        }
+        const auto start = to_number<std::uint64_t>(range->substr(0, dash), hex);
+        const auto end = to_number<std::uint64_t>(range->substr(dash + 1), hex);
+        const auto file_offset = to_number<std::uint64_t>(*offset, hex);
+        const auto major = to_number<std::uint32_t>(device->substr(0, colon), hex);
+        const auto minor = to_number<std::uint32_t>(device->substr(colon + 1), hex);
+        const auto inode_number = to_number<std::uint64_t>(*inode);
+        if (!start || !end || !file_offset || !major || !minor || !inode_number) {
+            return fail(ParseError::bad_number);
+        }
+        const auto readable = permission_flag((*perms)[0], 'r');
+        const auto writable = permission_flag((*perms)[1], 'w');
+        const auto executable = permission_flag((*perms)[2], 'x');
+        const char sharing = (*perms)[3];
+        if (*end < *start || !readable || !writable || !executable || (sharing != 'p' && sharing != 's')) {
+            return fail(ParseError::malformed);
+        }
+        MemoryMapping mapping{
+            .start = *start,
+            .end = *end,
+            .readable = *readable,
+            .writable = *writable,
+            .executable = *executable,
+            .shared = sharing == 's',
+            .offset = *file_offset,
+            .device_major = *major,
+            .device_minor = *minor,
+            .inode = *inode_number,
+            .path = {},
+        };
+        // The path follows the inode's column padding and runs to the end of the line.
+        if (const auto path_start = rest.find_first_not_of(" \t"); path_start != std::string_view::npos) {
+            mapping.path = std::string{rest.substr(path_start)};
+        }
+        mappings.push_back(std::move(mapping));
+    }
+    return mappings;
 }
 
 } // namespace lxe::proc

@@ -4,6 +4,8 @@
 
 #include <imgui.h>
 
+#include <system_error>
+
 #include <algorithm>
 #include <bit>
 #include <cstdint>
@@ -88,6 +90,9 @@ void handle_shortcuts(ViewState& state, FrameRequests& requests)
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
         requests.refresh_now = true;
     }
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_M)) {
+        state.show_details = !state.show_details;
+    }
 }
 
 void draw_toolbar(ViewState& state, FrameRequests& requests, const ViewConfig& config)
@@ -113,6 +118,10 @@ void draw_toolbar(ViewState& state, FrameRequests& requests, const ViewConfig& c
     if (ImGui::Button(button_label(config, icon_collapse, "Collapse all", "collapse").c_str())) {
         state.expand = ExpandRequest::collapse_all;
     }
+
+    ImGui::SameLine(0.0F, ImGui::GetFontSize() * 2.0F);
+    ImGui::Checkbox("Memory maps", &state.show_details);
+    item_tooltip("Show the memory mappings of the selected process (Ctrl+M)");
 }
 
 void setup_columns()
@@ -282,6 +291,159 @@ void draw_table(const model::Model& model, ViewState& state, const ViewConfig& c
     ImGui::EndTable();
 }
 
+/// A horizontal drag handle between the two panes; adjusts `height` of the lower pane.
+void draw_splitter(float& height, float min_height, float max_height)
+{
+    const float thickness = ImGui::GetStyle().ItemSpacing.y + 4.0F;
+    ImGui::InvisibleButton("splitter", ImVec2{std::max(ImGui::GetContentRegionAvail().x, 1.0F), thickness});
+    const bool active = ImGui::IsItemActive();
+    if (active) {
+        height -= ImGui::GetIO().MouseDelta.y;
+    }
+    if (active || ImGui::IsItemHovered()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+    }
+    const ImVec2 top_left = ImGui::GetItemRectMin();
+    const ImVec2 bottom_right = ImGui::GetItemRectMax();
+    const float y = (top_left.y + bottom_right.y) * 0.5F;
+    const ImU32 color = ImGui::GetColorU32(active || ImGui::IsItemHovered() ? ImGuiCol_SeparatorHovered : ImGuiCol_Separator);
+    ImGui::GetWindowDrawList()->AddLine(ImVec2{top_left.x, y}, ImVec2{bottom_right.x, y}, color, 1.0F);
+    height = std::clamp(height, min_height, std::max(min_height, max_height));
+}
+
+/// A readable reason for a failed details read.
+[[nodiscard]] std::string describe(const std::error_code& error)
+{
+    if (error == std::errc::permission_denied) {
+        return "permission denied (another user's process; run as root to see it)";
+    }
+    if (error == std::errc::no_such_file_or_directory) {
+        return "the process has exited";
+    }
+    return error.message();
+}
+
+enum class MapsColumn : unsigned char
+{
+    address,
+    end,
+    size,
+    permissions,
+    offset,
+    device,
+    inode,
+    path,
+    count,
+};
+
+void mono_text(std::string_view s, const ViewConfig& config)
+{
+    if (config.mono_font != nullptr) {
+        ImGui::PushFont(config.mono_font, 0.0F);
+    }
+    text(s);
+    if (config.mono_font != nullptr) {
+        ImGui::PopFont();
+    }
+}
+
+void draw_maps_table(const model::ProcessDetails& details, const ViewConfig& config, float height)
+{
+    constexpr ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable |
+                                      ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerV |
+                                      ImGuiTableFlags_SizingFixedFit;
+    if (!ImGui::BeginTable("maps", std::to_underlying(MapsColumn::count), flags, ImVec2{0.0F, height})) {
+        return;
+    }
+    const float em = ImGui::GetFontSize();
+    constexpr ImGuiTableColumnFlags fixed = ImGuiTableColumnFlags_WidthFixed;
+    constexpr ImGuiTableColumnFlags hidden = fixed | ImGuiTableColumnFlags_DefaultHide;
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableSetupColumn("Address", fixed | ImGuiTableColumnFlags_NoHide, em * 10.5F);
+    ImGui::TableSetupColumn("End", hidden, em * 10.5F);
+    ImGui::TableSetupColumn("Size", fixed, em * 5.5F);
+    ImGui::TableSetupColumn("Perms", fixed, em * 3.2F);
+    ImGui::TableSetupColumn("Offset", fixed, em * 5.5F);
+    ImGui::TableSetupColumn("Device", hidden, em * 4.0F);
+    ImGui::TableSetupColumn("Inode", hidden, em * 6.0F);
+    ImGui::TableSetupColumn("Path", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableHeadersRow();
+
+    // Only visible rows are submitted: a browser process has tens of thousands of mappings.
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(details.maps.size()));
+    while (clipper.Step()) {
+        for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+            const proc::MemoryMapping& mapping = details.maps.at(static_cast<std::size_t>(i));
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(std::to_underlying(MapsColumn::address));
+            mono_text(std::format("{:016x}", mapping.start), config);
+            ImGui::TableSetColumnIndex(std::to_underlying(MapsColumn::end));
+            mono_text(std::format("{:016x}", mapping.end), config);
+            ImGui::TableSetColumnIndex(std::to_underlying(MapsColumn::size));
+            text_right_aligned(model::format_bytes(mapping.size()));
+            ImGui::TableSetColumnIndex(std::to_underlying(MapsColumn::permissions));
+            mono_text(model::format_permissions(mapping), config);
+            ImGui::TableSetColumnIndex(std::to_underlying(MapsColumn::offset));
+            mono_text(std::format("{:08x}", mapping.offset), config);
+            ImGui::TableSetColumnIndex(std::to_underlying(MapsColumn::device));
+            mono_text(std::format("{:02x}:{:02x}", mapping.device_major, mapping.device_minor), config);
+            ImGui::TableSetColumnIndex(std::to_underlying(MapsColumn::inode));
+            text_right_aligned(mapping.inode == 0 ? std::string{} : std::format("{}", mapping.inode));
+            ImGui::TableSetColumnIndex(std::to_underlying(MapsColumn::path));
+            if (mapping.path.empty()) {
+                ImGui::PushStyleColor(ImGuiCol_Text, config.palette.kernel_thread_text);
+                text("(anonymous)");
+                ImGui::PopStyleColor();
+            }
+            else {
+                text(mapping.path);
+            }
+        }
+    }
+    ImGui::EndTable();
+}
+
+void draw_details_content(const model::Model& model, const model::ProcessDetails& details, const ViewConfig& config)
+{
+    if (!details.pid) {
+        ImGui::PushStyleColor(ImGuiCol_Text, config.palette.muted_text);
+        text("Select a process to see its memory maps.");
+        ImGui::PopStyleColor();
+        return;
+    }
+    const auto process = std::ranges::find(model.processes, *details.pid, &model::ProcessEntry::pid);
+    const std::string_view name = process != model.processes.end() ? std::string_view{process->name} : "?";
+    if (details.error) {
+        text(std::format("Memory maps of {} ({}): {}", name, *details.pid, describe(details.error)));
+        return;
+    }
+    text(std::format(
+        "Memory maps of {} ({}): {} mappings, {} mapped",
+        name,
+        *details.pid,
+        details.maps.size(),
+        model::format_bytes(details.mapped_bytes())
+    ));
+    draw_maps_table(details, config, 0.0F); // fills the rest of the pane
+}
+
+/// Lower pane: the memory mappings of the selected process. Occupies `height` whatever it
+/// shows, so the status bar below it stays put.
+void draw_details_pane(
+    const model::Model& model,
+    const model::ProcessDetails& details,
+    const ViewConfig& config,
+    float height
+)
+{
+    if (ImGui::BeginChild("details", ImVec2{0.0F, height}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar)) {
+        draw_details_content(model, details, config);
+    }
+    ImGui::EndChild();
+}
+
 void draw_status_bar(const model::SystemSummary& summary, const ViewState& state, const ViewConfig& config)
 {
     constexpr double hundred = 100.0;
@@ -312,7 +474,12 @@ void draw_status_bar(const model::SystemSummary& summary, const ViewState& state
 
 } // namespace
 
-FrameRequests draw_main_window(const model::Model& model, ViewState& state, const ViewConfig& config)
+FrameRequests draw_main_window(
+    const model::Model& model,
+    const model::ProcessDetails& details,
+    ViewState& state,
+    const ViewConfig& config
+)
 {
     FrameRequests requests;
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -323,8 +490,25 @@ FrameRequests draw_main_window(const model::Model& model, ViewState& state, cons
     if (ImGui::Begin("Linux Explorer", nullptr, window_flags)) {
         handle_shortcuts(state, requests);
         draw_toolbar(state, requests, config);
-        const float status_bar_height = ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y;
-        draw_table(model, state, config, -status_bar_height);
+        const float line = ImGui::GetTextLineHeight();
+        const float spacing = ImGui::GetStyle().ItemSpacing.y;
+        const float status_bar_height = line + spacing;
+        if (state.show_details) {
+            // Both panes share the space above the status bar; the lower one keeps its height.
+            const float available = ImGui::GetContentRegionAvail().y - status_bar_height;
+            const float min_pane = line * 4.0F;
+            if (state.details_height <= 0.0F) {
+                state.details_height = available / 3.0F;
+            }
+            const float splitter = spacing + 4.0F;
+            state.details_height = std::clamp(state.details_height, min_pane, std::max(min_pane, available - min_pane - splitter));
+            draw_table(model, state, config, std::max(available - state.details_height - splitter - spacing, min_pane));
+            draw_splitter(state.details_height, min_pane, available - min_pane - splitter);
+            draw_details_pane(model, details, config, -status_bar_height);
+        }
+        else {
+            draw_table(model, state, config, -status_bar_height);
+        }
         state.expand = ExpandRequest::none;
         draw_status_bar(model.summary, state, config);
     }

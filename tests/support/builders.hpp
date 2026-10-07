@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -83,6 +84,30 @@ inline proc::Snapshot snapshot(
         result.processes.push_back(process(spec));
     }
     return result;
+}
+
+/// A memory mapping with the given permissions string ("r-xp").
+inline proc::MemoryMapping mapping(
+    std::uint64_t start,
+    std::uint64_t end,
+    std::string path = {},
+    std::string_view perms = "r--p",
+    std::uint64_t offset = 0
+)
+{
+    return proc::MemoryMapping{
+        .start = start,
+        .end = end,
+        .readable = perms[0] == 'r',
+        .writable = perms[1] == 'w',
+        .executable = perms[2] == 'x',
+        .shared = perms[3] == 's',
+        .offset = offset,
+        .device_major = path.starts_with('/') ? 0x103U : 0U,
+        .device_minor = path.starts_with('/') ? 3U : 0U,
+        .inode = path.starts_with('/') ? 49414585U : 0U,
+        .path = std::move(path),
+    };
 }
 
 /// User database stand-in: root and alice exist, everyone else is unknown.

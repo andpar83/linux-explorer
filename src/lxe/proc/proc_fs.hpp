@@ -48,6 +48,10 @@ public:
 
     [[nodiscard]] std::expected<SystemInfo, std::error_code> read_system() const;
 
+    /// Memory mappings of a process (/proc/<pid>/maps). Another user's process needs
+    /// CAP_SYS_PTRACE; the kernel answers with EACCES, reported as such.
+    [[nodiscard]] std::expected<std::vector<MemoryMapping>, std::error_code> read_maps(ProcessId pid) const;
+
     /// Reads every process it can. Processes that exit, deny access or can't be parsed while
     /// being read are skipped: the process table changes constantly, so that is not an error.
     [[nodiscard]] std::expected<Snapshot, std::error_code> read_snapshot() const;

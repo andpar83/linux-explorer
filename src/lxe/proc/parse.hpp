@@ -102,6 +102,26 @@ struct MemoryInfo
     friend bool operator==(const MemoryInfo&, const MemoryInfo&) = default;
 };
 
+/// One line of /proc/<pid>/maps: a contiguous range of virtual memory and what backs it.
+struct MemoryMapping
+{
+    std::uint64_t start = 0;
+    std::uint64_t end = 0; ///< One past the last byte.
+    bool readable = false;
+    bool writable = false;
+    bool executable = false;
+    bool shared = false; ///< MAP_SHARED ('s') rather than private copy-on-write ('p').
+    std::uint64_t offset = 0;
+    std::uint32_t device_major = 0;
+    std::uint32_t device_minor = 0;
+    std::uint64_t inode = 0;
+    std::string path; ///< File, "[heap]", "[stack]", "[vdso]", "[anon:name]"...; empty for anonymous memory.
+
+    [[nodiscard]] std::uint64_t size() const noexcept { return end - start; }
+
+    friend bool operator==(const MemoryMapping&, const MemoryMapping&) = default;
+};
+
 /// A /proc directory name such as "1234" as a process id; nullopt for anything else ("self", "net", ...).
 [[nodiscard]] std::optional<ProcessId> parse_pid(std::string_view text) noexcept;
 
@@ -120,5 +140,9 @@ struct MemoryInfo
 
 /// Parses /proc/meminfo. Falls back to MemFree on kernels without MemAvailable.
 [[nodiscard]] std::expected<MemoryInfo, std::error_code> parse_meminfo(std::string_view text);
+
+/// Parses /proc/<pid>/maps, in file order. A path may contain spaces; a malformed line fails the
+/// whole result.
+[[nodiscard]] std::expected<std::vector<MemoryMapping>, std::error_code> parse_maps(std::string_view text);
 
 } // namespace lxe::proc

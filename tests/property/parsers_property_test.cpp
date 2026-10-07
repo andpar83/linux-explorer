@@ -48,7 +48,7 @@ public:
         std::string out(number<std::size_t>(0, max_length), '\0');
         for (char& c : out) {
             // Mostly characters that matter to the parsers, sometimes any byte.
-            c = number(0, 3) == 0 ? static_cast<char>(number<int>(-128, 127)) : pick(" ()\n\t:0123456789-SRZ\0kB");
+            c = number(0, 3) == 0 ? static_cast<char>(number<int>(-128, 127)) : pick(" ()\n\t:0123456789abcdef-SRZrwxps\0kB[]/");
         }
         return out;
     }
@@ -123,6 +123,48 @@ TEST_CASE("proc.parse_cmdline.round_trips_generated_arguments")
     }
 }
 
+TEST_CASE("proc.parse_maps.round_trips_generated_lines")
+{
+    Generator gen;
+    for (int i = 0; i < iterations; ++i) {
+        std::vector<lxe::proc::MemoryMapping> expected(gen.number<std::size_t>(0, 6));
+        std::string text;
+        for (auto& m : expected) {
+            m.start = gen.number<std::uint64_t>();
+            m.end = gen.number<std::uint64_t>(m.start);
+            m.readable = gen.number(0, 1) == 1;
+            m.writable = gen.number(0, 1) == 1;
+            m.executable = gen.number(0, 1) == 1;
+            m.shared = gen.number(0, 1) == 1;
+            m.offset = gen.number<std::uint64_t>();
+            m.device_major = gen.number<std::uint32_t>();
+            m.device_minor = gen.number<std::uint32_t>();
+            m.inode = gen.number<std::uint64_t>();
+            // A path is empty or starts with a visible character; the kernel pads before it.
+            m.path = gen.number(0, 3) == 0 ? std::string{} : "/" + gen.text("ab ()[]:.-_", 20);
+            text += std::format(
+                "{:x}-{:x} {}{}{}{} {:08x} {:02x}:{:02x} {}{}{}\n",
+                m.start,
+                m.end,
+                m.readable ? 'r' : '-',
+                m.writable ? 'w' : '-',
+                m.executable ? 'x' : '-',
+                m.shared ? 's' : 'p',
+                m.offset,
+                m.device_major,
+                m.device_minor,
+                m.inode,
+                std::string(gen.number<std::size_t>(1, 20), ' '),
+                m.path
+            );
+        }
+        INFO("text: " << text);
+        const auto parsed = lxe::proc::parse_maps(text);
+        REQUIRE(parsed.has_value());
+        REQUIRE(*parsed == expected);
+    }
+}
+
 TEST_CASE("proc.parsers.survive_arbitrary_bytes")
 {
     Generator gen;
@@ -138,5 +180,11 @@ TEST_CASE("proc.parsers.survive_arbitrary_bytes")
         std::ignore = lxe::proc::parse_cpu_times(input);
         std::ignore = lxe::proc::parse_meminfo(input);
         std::ignore = lxe::proc::parse_pid(input);
+        if (const auto maps = lxe::proc::parse_maps(input)) {
+            for (const auto& m : *maps) {
+                CHECK(m.end >= m.start);
+                CHECK(input.find(m.path) != std::string::npos);
+            }
+        }
     }
 }

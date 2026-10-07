@@ -56,6 +56,17 @@ public:
         return result;
     }
 
+    /// Presses a key while a modifier is held, e.g. Ctrl+M.
+    template <class Draw>
+    auto press_chord(ImGuiKey modifier, ImGuiKey key, Draw&& draw)
+    {
+        ImGui::GetIO().AddKeyEvent(modifier, true);
+        auto result = press(key, draw);
+        ImGui::GetIO().AddKeyEvent(modifier, false);
+        std::ignore = frame(draw);
+        return result;
+    }
+
 private:
     ImVec2 display_size_{1920.0F, 1080.0F};
 };

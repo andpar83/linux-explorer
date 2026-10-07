@@ -8,11 +8,15 @@
 
 #include <imgui_internal.h>
 
+#include <cstdint>
+#include <system_error>
+
 using lxe::ProcessId;
 using lxe::UserId;
 using lxe::test::entry;
 using lxe::test::HeadlessImGui;
 using lxe::test::make_model;
+using lxe::test::mapping;
 using lxe::ui::ExpandRequest;
 using lxe::ui::ViewConfig;
 using lxe::ui::ViewState;
@@ -45,7 +49,20 @@ ViewConfig config_for(lxe::ui::Theme theme)
         .current_user = UserId{1000},
         .palette = lxe::ui::apply_theme(theme, 1.0F, 15.0F),
         .icons = false,
+        .mono_font = nullptr,
     };
+}
+
+const lxe::model::ProcessDetails no_details{};
+
+lxe::model::ProcessDetails details_for(pid_t pid, std::size_t mappings)
+{
+    lxe::model::ProcessDetails details{.pid = ProcessId{pid}, .maps = {}, .error = {}};
+    for (std::size_t i = 0; i < mappings; ++i) {
+        const auto start = 0x7f0000000000U + static_cast<std::uint64_t>(i) * 0x2000U;
+        details.maps.push_back(mapping(start, start + 0x1000U, i % 3 == 0 ? "" : "/usr/lib/libfoo.so", "r-xp"));
+    }
+    return details;
 }
 
 } // namespace
@@ -58,7 +75,7 @@ TEST_CASE("main_window.draws_a_model_in_both_themes")
         const auto config = config_for(theme);
         ViewState state;
         for (int i = 0; i < 3; ++i) {
-            const auto requests = imgui.frame([&] { return lxe::ui::draw_main_window(model, state, config); });
+            const auto requests = imgui.frame([&] { return lxe::ui::draw_main_window(model, no_details, state, config); });
             CHECK_FALSE(requests.refresh_now);
         }
         CHECK_FALSE(state.paused);
@@ -74,7 +91,7 @@ TEST_CASE("main_window.f5_requests_a_refresh")
     const auto model = sample_model();
     const auto config = config_for(lxe::ui::Theme::light);
     ViewState state;
-    const auto draw = [&] { return lxe::ui::draw_main_window(model, state, config); };
+    const auto draw = [&] { return lxe::ui::draw_main_window(model, no_details, state, config); };
     std::ignore = imgui.frame(draw);
     CHECK(imgui.press(ImGuiKey_F5, draw).refresh_now);
     CHECK_FALSE(imgui.frame(draw).refresh_now);
@@ -86,7 +103,7 @@ TEST_CASE("main_window.space_toggles_pause")
     const auto model = sample_model();
     const auto config = config_for(lxe::ui::Theme::light);
     ViewState state;
-    const auto draw = [&] { return lxe::ui::draw_main_window(model, state, config); };
+    const auto draw = [&] { return lxe::ui::draw_main_window(model, no_details, state, config); };
     std::ignore = imgui.frame(draw);
     std::ignore = imgui.press(ImGuiKey_Space, draw);
     CHECK(state.paused);
@@ -100,10 +117,10 @@ TEST_CASE("main_window.expand_requests_are_applied_once")
     const auto model = sample_model();
     const auto config = config_for(lxe::ui::Theme::light);
     ViewState state{.paused = false, .selected = ProcessId{100}, .expand = ExpandRequest::expand_all};
-    std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, state, config); });
+    std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, no_details, state, config); });
     CHECK(state.expand == ExpandRequest::none);
     state.expand = ExpandRequest::collapse_all;
-    std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, state, config); });
+    std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, no_details, state, config); });
     CHECK(state.expand == ExpandRequest::none);
     CHECK(state.selected == ProcessId{100});
 }
@@ -115,7 +132,7 @@ TEST_CASE("main_window.handles_empty_and_very_deep_trees")
     ViewState state{.paused = false, .selected = std::nullopt, .expand = ExpandRequest::expand_all};
 
     const auto empty = make_model({});
-    std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(empty, state, config); });
+    std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(empty, no_details, state, config); });
 
     std::vector<lxe::model::ProcessEntry> chain;
     for (int pid = 1; pid <= 2000; ++pid) {
@@ -124,7 +141,7 @@ TEST_CASE("main_window.handles_empty_and_very_deep_trees")
     const auto deep = make_model(std::move(chain));
     state.expand = ExpandRequest::expand_all;
     for (int i = 0; i < 2; ++i) {
-        std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(deep, state, config); });
+        std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(deep, no_details, state, config); });
     }
     CHECK(state.expand == ExpandRequest::none);
 }
@@ -145,7 +162,62 @@ TEST_CASE("main_window.draws_lists_longer_than_the_window")
     const auto model = make_model(std::move(processes));
     ViewState state{.paused = false, .selected = std::nullopt, .expand = ExpandRequest::expand_all};
     for (int i = 0; i < 3; ++i) {
-        std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, state, config); });
+        std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, no_details, state, config); });
     }
     CHECK(state.expand == ExpandRequest::none);
+}
+
+TEST_CASE("main_window.details_pane_shows_maps_errors_and_hints")
+{
+    HeadlessImGui imgui;
+    const auto model = sample_model();
+    const auto config = config_for(lxe::ui::Theme::light);
+    ViewState state;
+    const auto draw = [&](const lxe::model::ProcessDetails& details) {
+        return imgui.frame([&] { return lxe::ui::draw_main_window(model, details, state, config); });
+    };
+
+    std::ignore = draw(no_details); // nothing selected: a hint
+    state.selected = ProcessId{100};
+    std::ignore = draw(details_for(100, 3)); // maps of a listed process
+    std::ignore = draw(details_for(4242, 2)); // maps of a process no longer in the table
+
+    lxe::model::ProcessDetails denied{.pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::permission_denied)};
+    std::ignore = draw(denied);
+    lxe::model::ProcessDetails gone{.pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::no_such_file_or_directory)};
+    std::ignore = draw(gone);
+    lxe::model::ProcessDetails other{.pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::io_error)};
+    std::ignore = draw(other);
+    CHECK(state.details_height > 0.0F);
+}
+
+TEST_CASE("main_window.details_pane_clips_long_lists")
+{
+    HeadlessImGui imgui;
+    imgui.set_display_size(800.0F, 300.0F);
+    const auto model = sample_model();
+    const auto config = config_for(lxe::ui::Theme::dark);
+    const auto details = details_for(100, 20'000);
+    ViewState state{.paused = false, .selected = ProcessId{100}};
+    for (int i = 0; i < 3; ++i) {
+        std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, details, state, config); });
+    }
+}
+
+TEST_CASE("main_window.ctrl_m_toggles_the_details_pane")
+{
+    HeadlessImGui imgui;
+    const auto model = sample_model();
+    const auto config = config_for(lxe::ui::Theme::light);
+    ViewState state;
+    const auto draw = [&] { return lxe::ui::draw_main_window(model, no_details, state, config); };
+    std::ignore = imgui.frame(draw);
+    REQUIRE(state.show_details);
+    std::ignore = imgui.press_chord(ImGuiMod_Ctrl, ImGuiKey_M, draw);
+    CHECK_FALSE(state.show_details);
+    std::ignore = imgui.press_chord(ImGuiMod_Ctrl, ImGuiKey_M, draw);
+    CHECK(state.show_details);
+    // A plain M does nothing.
+    std::ignore = imgui.press(ImGuiKey_M, draw);
+    CHECK(state.show_details);
 }

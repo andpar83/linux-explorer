@@ -66,4 +66,14 @@ std::string join_command_line(std::span<const std::string> args)
     return args | std::views::join_with(' ') | std::ranges::to<std::string>();
 }
 
+std::string format_permissions(const proc::MemoryMapping& mapping)
+{
+    return {
+        mapping.readable ? 'r' : '-',
+        mapping.writable ? 'w' : '-',
+        mapping.executable ? 'x' : '-',
+        mapping.shared ? 's' : 'p',
+    };
+}
+
 } // namespace lxe::model
