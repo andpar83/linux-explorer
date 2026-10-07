@@ -1,0 +1,70 @@
+# Formatting rules. CLion applies this automatically (Settings | Editor | Code Style | C/C++ | ClangFormat).
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: Latest
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+AccessModifierOffset: -4
+NamespaceIndentation: None
+IndentRequiresClause: true
+RequiresClausePosition: OwnLine
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterControlStatement: Never
+  BeforeElse: false
+  BeforeCatch: false
+  BeforeLambdaBody: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+QualifierAlignment: Left
+
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: false
+BinPackParameters: false
+AlignAfterOpenBracket: BlockIndent
+PackConstructorInitializers: NextLine
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: BeforeComma
+Cpp11BracedListStyle: true
+SpaceBeforeCpp11BracedList: false
+InsertBraces: true
+InsertNewlineAtEOF: true
+RemoveSemicolon: true
+SeparateDefinitionBlocks: Always
+MaxEmptyLinesToKeep: 1
+FixNamespaceComments: true
+ShortNamespaceLines: 0
+
+IncludeBlocks: Regroup
+SortIncludes: CaseSensitive
+IncludeCategories:
+  - Regex: '^"lxe/'          # project headers
+    Priority: 1
+  - Regex: '^<(catch2|gtest|rapidcheck)/' # test frameworks
+    Priority: 2
+  - Regex: '^<(sys|linux|netinet|arpa)/'  # Linux / POSIX system headers
+    Priority: 4
+  - Regex: '^<.*\.h>'        # other C headers
+    Priority: 4
+  - Regex: '^<'              # C++ standard library
+    Priority: 3

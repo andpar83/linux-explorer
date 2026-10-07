@@ -1,0 +1,96 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 30, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_COLOR_DIAGNOSTICS": "ON"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "Debug build with libstdc++ assertions, no sanitizers",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "asan",
+      "displayName": "Debug + ASan/LSan/UBSan",
+      "description": "AddressSanitizer, LeakSanitizer, UndefinedBehaviorSanitizer, libstdc++ debug mode",
+      "inherits": "debug",
+      "cacheVariables": { "LXE_SANITIZER": "address", "LXE_LIBSTDCXX_DEBUG": "ON" }
+    },
+    {
+      "name": "tsan",
+      "displayName": "Debug + TSan/UBSan",
+      "description": "ThreadSanitizer and UndefinedBehaviorSanitizer",
+      "inherits": "debug",
+      "cacheVariables": { "LXE_SANITIZER": "thread" }
+    },
+    {
+      "name": "ubsan",
+      "displayName": "Debug + UBSan",
+      "description": "UndefinedBehaviorSanitizer only",
+      "inherits": "debug",
+      "cacheVariables": { "LXE_SANITIZER": "undefined" }
+    },
+    {
+      "name": "analyze",
+      "displayName": "Debug + GCC static analyzer",
+      "description": "-fanalyzer; warnings not fatal because the C++ analyzer still has false positives",
+      "inherits": "debug",
+      "cacheVariables": { "LXE_ENABLE_ANALYZER": "ON", "LXE_WARNINGS_AS_ERRORS": "OFF" }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (hardened)",
+      "description": "Optimised build with hardening flags",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "relwithdebinfo",
+      "displayName": "RelWithDebInfo (hardened)",
+      "description": "Optimised build with debug info and hardening flags",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "asan", "configurePreset": "asan" },
+    { "name": "tsan", "configurePreset": "tsan" },
+    { "name": "ubsan", "configurePreset": "ubsan" },
+    { "name": "analyze", "configurePreset": "analyze" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "relwithdebinfo", "configurePreset": "relwithdebinfo" }
+  ],
+  "testPresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    },
+    { "name": "debug", "inherits": "base", "configurePreset": "debug" },
+    { "name": "asan", "inherits": "base", "configurePreset": "asan" },
+    { "name": "tsan", "inherits": "base", "configurePreset": "tsan" },
+    { "name": "ubsan", "inherits": "base", "configurePreset": "ubsan" },
+    { "name": "analyze", "inherits": "base", "configurePreset": "analyze" },
+    { "name": "release", "inherits": "base", "configurePreset": "release" },
+    { "name": "relwithdebinfo", "inherits": "base", "configurePreset": "relwithdebinfo" }
+  ],
+  "workflowPresets": [
+    { "name": "debug", "steps": [ { "type": "configure", "name": "debug" }, { "type": "build", "name": "debug" }, { "type": "test", "name": "debug" } ] },
+    { "name": "asan", "steps": [ { "type": "configure", "name": "asan" }, { "type": "build", "name": "asan" }, { "type": "test", "name": "asan" } ] },
+    { "name": "tsan", "steps": [ { "type": "configure", "name": "tsan" }, { "type": "build", "name": "tsan" }, { "type": "test", "name": "tsan" } ] },
+    { "name": "ubsan", "steps": [ { "type": "configure", "name": "ubsan" }, { "type": "build", "name": "ubsan" }, { "type": "test", "name": "ubsan" } ] },
+    { "name": "analyze", "steps": [ { "type": "configure", "name": "analyze" }, { "type": "build", "name": "analyze" } ] },
+    { "name": "release", "steps": [ { "type": "configure", "name": "release" }, { "type": "build", "name": "release" }, { "type": "test", "name": "release" } ] }
+  ]
+}
