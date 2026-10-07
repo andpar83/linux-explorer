@@ -31,9 +31,7 @@ jobs:
           apt-get install -y --no-install-recommends g++-15 cmake ninja-build libsdl3-dev git ca-certificates
       - uses: actions/checkout@v4
       - name: Configure, build and test
-        # setarch -R turns address-space randomisation off: the sanitizers' shadow memory layout
-        # doesn't tolerate the high-entropy randomisation GitHub's kernels use.
-        run: setarch "$(uname -m)" -R cmake --workflow --preset ${{ matrix.preset }}
+        run: cmake --workflow --preset ${{ matrix.preset }}
 
   package:
     name: Release build and .deb on Ubuntu 26.04
@@ -45,7 +43,7 @@ jobs:
       - name: Install the toolchain
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends g++-15 cmake ninja-build libsdl3-dev dpkg-dev git ca-certificates gh
+          apt-get install -y --no-install-recommends g++-15 cmake ninja-build libsdl3-dev dpkg-dev file git ca-certificates gh
       - uses: actions/checkout@v4
       - name: Configure, build and test
         run: cmake --workflow --preset release

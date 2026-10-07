@@ -187,10 +187,11 @@ builds cleanly is an IDE problem: confirm with the compiler before changing code
 
 `.github/workflows/ci.yml` runs on every push to `main`, on pull requests and on `v*` tags,
 inside an `ubuntu:26.04` container (the GitHub-hosted runners' own Ubuntu is older and lacks
-GCC 15 and SDL3). Jobs: the `asan` and `tsan` workflows, run under `setarch -R` because the
-sanitizers' shadow memory doesn't tolerate the runners' high-entropy address randomisation; and
-the `release` workflow followed by the `.deb` build, an `apt install` of the result and a smoke
-run of the installed binary. The `.deb` is uploaded as a workflow artifact; on a tag the job
+GCC 15 and SDL3). Jobs: the `asan` and `tsan` workflows; and the `release` workflow followed by
+the `.deb` build, an `apt install` of the result and a smoke run of the installed binary.
+Docker's seccomp profile forbids `setarch -R` and `personality()` tricks in the container, so
+the sanitizers must cope with the runners' address randomisation on their own (GCC 15's do).
+CPack's DEB generator needs the `file` and `dpkg-dev` packages. The `.deb` is uploaded as a workflow artifact; on a tag the job
 also creates the GitHub Release with it. The container runs as root, so tests must not assume
 an unprivileged user (the permission-denied test uses `SKIP` as root).
 
