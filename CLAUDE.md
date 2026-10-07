@@ -29,8 +29,8 @@ committed. Build only what the current step asks for; don't anticipate later ste
 
 | Component | What we use | Notes |
 |-----------|-------------|-------|
-| Compiler  | GCC 16 (`g++-16`, Ubuntu package `16-20260322-1ubuntu1`: a trunk snapshot that reports itself as 16.0.1 *experimental*) | Pinned with `CMAKE_CXX_COMPILER` in the hidden `base` preset, and `CMakeLists.txt` falls back to `g++-16` when no compiler was chosen (CLion's default profile, bare `cmake -S . -B build`). An explicit `-DCMAKE_CXX_COMPILER` or `CXX` still wins. Plain `g++` is still GCC 15.2: Ubuntu's `g++` metapackage follows the distro default and installing `g++-16` doesn't move it. Being a snapshot, a compiler bug is a possibility; if something looks like one, check with `g++-15` before blaming the code. Clang is not installed (needed later for libFuzzer / CLI clang-tidy). |
-| Standard  | C++26 (`-std=c++26`, no GNU extensions) | Use a feature only if this GCC 16 / libstdc++ 16 implements it: see the verified list below, then cppreference's compiler-support table. |
+| Compiler  | GCC 15.2 (`g++-15`) | Chosen in one place: `LXE_GCC_MAJOR` at the top of `CMakeLists.txt`, used whenever no compiler was given (presets, CLion profiles, bare `cmake -S . -B build`). An explicit `-DCMAKE_CXX_COMPILER` or `CXX` still wins; any other GCC major prints a CMake warning, older is an error. GCC 16 is installed (`g++-16`) but deliberately unused: Ubuntu ships a pre-release trunk snapshot (16.0.1 *experimental*), and CLion's Nova engine flags `std::println` as an error with its library headers. Revisit when a released GCC 16 is packaged and CLion handles it. Clang is not installed (needed later for libFuzzer / CLI clang-tidy). |
+| Standard  | **C++23** (`-std=c++23`, no GNU extensions) | Chosen for consistency: compiler, CLion and clangd all fully understand it. Stick to the verified list below; no C++26 features. |
 | Build     | CMake >= 3.30, `CMakePresets.json` | `cmake` is **not on PATH** on this machine. CLion's bundled copy works: `/home/andrey/Desktop/clion-2026.2.0.1/bin/cmake/linux/x64/bin/cmake` (Ninja next to it: `.../bin/ninja/linux/x64/ninja`); the path changes with CLion upgrades. Or `sudo apt install cmake ninja-build`. |
 | Generator | not pinned in presets | CLion uses its bundled Ninja; the CLI uses the default (Unix Makefiles) unless `CMAKE_GENERATOR=Ninja` is exported. |
 | Build dirs | `build/<preset>/` (CLI), `cmake-build-*/` (CLion) | Both git-ignored. Never build in-source. |
@@ -46,25 +46,33 @@ committed. Build only what the current step asks for; don't anticipate later ste
 | `analyze` | Debug | + GCC `-fanalyzer` (warnings not fatal: the C++ analyzer still has false positives) |
 | `release` / `relwithdebinfo` | Release / RelWithDebInfo | hardening: `_FORTIFY_SOURCE=3`, stack protector, stack-clash protection, CET (`-fcf-protection=full`), `-ftrivial-auto-var-init=zero`, PIE, RELRO + `-z now`, `noexecstack` |
 
-### C++26 support in this GCC 16 (checked with feature-test macros on 2026-10-06)
+### C++23 in GCC 15: what's available (verified with feature-test macros, 2026-10-06)
 
-Available, on by default:
+Use these freely; prefer them over older idioms.
 
-- Language: pack indexing, placeholder `_` variables, `= delete("reason")`, variadic friends,
-  `constexpr` exceptions, expansion statements (`template for`).
-- Library: `std::print`/`std::println` (incl. 2024 revisions), `std::format`, `std::expected`,
-  `std::ranges::to`, `std::generator`, `std::views::concat`, `std::inplace_vector`,
-  `std::function_ref`, `std::text_encoding`, `<debugging>` (`std::breakpoint`,
-  `std::is_debugger_present`), range support for `std::optional`, `constexpr` exceptions in the library.
+- **Language**: deducing `this` (explicit object parameter), `if consteval`, multidimensional
+  `operator[]`, `auto(x)` decay-copy, `static operator()`, `uz`/`z` literal suffixes,
+  `\N{...}` named character escapes, implicit move on return, relaxed `constexpr`, `[[assume]]`.
+- **Output and text**: `std::print`, `std::println`, `std::format` (incl. formatting of ranges
+  and tuples), `std::string::contains`, `resize_and_overwrite`, `std::spanstream`.
+- **Error handling and vocabulary**: `std::expected` (incl. monadic `and_then`/`transform`/
+  `or_else`), monadic `std::optional`, `std::unreachable`, `std::to_underlying`, `std::byteswap`,
+  `std::move_only_function`, `std::bind_back`, `std::invoke_r`, `std::forward_like`,
+  `std::out_ptr`/`inout_ptr` (wrapping C APIs that return handles through a pointer).
+- **Containers**: `std::flat_map`, `std::flat_set`, construction/insertion from ranges
+  (`std::from_range`, `insert_range`, `append_range`).
+- **Ranges**: `std::ranges::to`, `std::generator`, `views::zip`, `zip_transform`, `adjacent`,
+  `enumerate`, `chunk`, `chunk_by`, `slide`, `stride`, `join_with`, `cartesian_product`,
+  `repeat`, `as_const`, `as_rvalue`; algorithms `ranges::fold_left`/`fold_right`, `contains`,
+  `find_last`, `iota`.
+- **Diagnostics**: `<stacktrace>` works but needs linking `stdc++exp`; add it to the target
+  that uses it, not globally.
 
-Available behind a flag, **not enabled in the project yet** (decide when first needed, then add
-the flag in `CMakeLists.txt` and update this list):
-
-- Contracts (`pre`, `post`, `contract_assert`): `-fcontracts`, `__cpp_contracts == 202502`.
-
-Not available: reflection (`-freflection` is accepted but `__cpp_reflection` is not defined;
-treat it as absent), trivial relocatability, `std::hive`, senders/receivers (`std::execution`),
-`import std` (`__cpp_lib_modules` undefined).
+Not available in GCC 15, don't use: `std::mdspan` (no header in GCC 15), `ranges::starts_with`/
+`ends_with` (use `std::string_view::starts_with` or `ranges::mismatch`), `std::start_lifetime_as`,
+`constexpr` `<cmath>`. C++20 basics (`std::jthread`, `std::span`, `std::bit_cast`,
+`std::source_location`, concepts, coroutines, `<=>`, `std::chrono` calendars) are all there.
+C++20 modules and `import std` are not used.
 
 Sanitizers available with GCC: address, leak, undefined, thread (MemorySanitizer and HWASan
 need Clang and are not available). Sanitizer runtime options (`ASAN_OPTIONS`, `TSAN_OPTIONS`,
@@ -91,13 +99,14 @@ ctest --preset asan -R unit.                  # one category
 
 The project is opened as a CMake project. CLion creates its own `Debug` profile
 (`cmake-build-debug/`, Ninja, no compiler given), which works because `CMakeLists.txt` picks
-`g++-16` itself. CLion also reads `CMakePresets.json` and lists each configure preset as a
+`g++-15` itself. CLion also reads `CMakePresets.json` and lists each configure preset as a
 profile, disabled by default: enable them in *Settings | Build, Execution, Deployment | CMake*
 (`asan` should be the everyday profile; it is the only way to get sanitizers inside the IDE).
 `.clang-format` and `.clang-tidy` are picked up by CLion's bundled clangd. `.idea/` and
 `cmake-build-*/` are git-ignored. Don't add files or settings that only work from the CLI or
-only from the IDE. If CLion's CMake output shows the wrong compiler, use *Tools | CMake | Reset
-Cache and Reload Project*.
+only from the IDE. If CLion's CMake output shows the wrong compiler or the GCC-version warning, use
+*Tools | CMake | Reset Cache and Reload Project*. An error mark in the editor on code that
+builds cleanly is an IDE problem: confirm with the compiler before changing code.
 
 ## C++ rules
 

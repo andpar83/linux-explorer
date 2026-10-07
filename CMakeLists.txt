@@ -1,12 +1,15 @@
 cmake_minimum_required(VERSION 3.30...4.3)
 
-# Prefer GCC 16 when the caller hasn't chosen a compiler: CLion's default profile and a bare
-# `cmake -S . -B build` pass none. An explicit -DCMAKE_CXX_COMPILER or CXX env var still wins.
-# Must stay above project(), which is where compiler detection happens.
+# The project standardises on GCC 15 + C++23: the newest stable GCC on this distro, fully
+# understood by CLion's code engine. This is the only place that picks the compiler.
+# It applies when the caller hasn't chosen one (presets, CLion profiles, bare `cmake -S . -B build`);
+# an explicit -DCMAKE_CXX_COMPILER or CXX env var still wins. Must stay above project(),
+# which is where compiler detection happens.
+set(LXE_GCC_MAJOR 15)
 if(NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
-    find_program(LXE_GXX16 NAMES g++-16 NO_CACHE)
-    if(LXE_GXX16)
-        set(CMAKE_CXX_COMPILER "${LXE_GXX16}")
+    find_program(LXE_DEFAULT_CXX NAMES g++-${LXE_GCC_MAJOR} NO_CACHE)
+    if(LXE_DEFAULT_CXX)
+        set(CMAKE_CXX_COMPILER "${LXE_DEFAULT_CXX}")
     endif()
 endif()
 
@@ -19,13 +22,20 @@ if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
     message(FATAL_ERROR "In-source builds are not allowed. Use a preset: cmake --preset asan")
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
-    message(FATAL_ERROR "GCC >= 16 is required (found ${CMAKE_CXX_COMPILER_VERSION} at ${CMAKE_CXX_COMPILER}). "
-        "Install g++-16, or pass -DCMAKE_CXX_COMPILER=g++-16 / set the CLion toolchain compiler to it.")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    string(REGEX MATCH "^[0-9]+" lxe_gcc_found_major "${CMAKE_CXX_COMPILER_VERSION}")
+    if(lxe_gcc_found_major LESS LXE_GCC_MAJOR)
+        message(FATAL_ERROR "GCC >= ${LXE_GCC_MAJOR} is required (found ${CMAKE_CXX_COMPILER_VERSION} at ${CMAKE_CXX_COMPILER})")
+    elseif(NOT lxe_gcc_found_major EQUAL LXE_GCC_MAJOR)
+        # Allowed for experiments, but loud: usually a stale cache from an older setup.
+        message(WARNING "Building with GCC ${CMAKE_CXX_COMPILER_VERSION}; the project standardises on GCC ${LXE_GCC_MAJOR}. "
+            "If you didn't choose this on purpose, delete the build directory "
+            "(CLion: Tools | CMake | Reset Cache and Reload Project).")
+    endif()
 endif()
 
 # ---- Language -------------------------------------------------------------
-set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 # No C++ modules yet; scanning needs Ninja and slows every compile. Flip when modules are adopted.
@@ -49,7 +59,7 @@ include(Hardening)
 # One INTERFACE target carries every project-wide flag; every real target links it.
 add_library(lxe_options INTERFACE)
 add_library(lxe::options ALIAS lxe_options)
-target_compile_features(lxe_options INTERFACE cxx_std_26)
+target_compile_features(lxe_options INTERFACE cxx_std_23)
 # Bounds/precondition checks inside libstdc++ (operator[], iterators...). Cheap; on in every config.
 target_compile_definitions(lxe_options INTERFACE _GLIBCXX_ASSERTIONS)
 lxe_set_warnings(lxe_options)

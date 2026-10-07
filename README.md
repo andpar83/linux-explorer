@@ -9,7 +9,7 @@ Status: early skeleton (hello world + build system). See `CLAUDE.md` for goals, 
 
 ## Build
 
-Requirements: GCC 16 (`g++-16`, pinned by the presets), CMake >= 3.30, optionally Ninja.
+Requirements: GCC 15 (`g++-15`, selected automatically), C++23, CMake >= 3.30, optionally Ninja.
 
 ```sh
 cmake --workflow --preset asan      # configure + build + test with ASan/LSan/UBSan

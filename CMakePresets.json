@@ -7,7 +7,6 @@
       "hidden": true,
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "g++-16",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_COLOR_DIAGNOSTICS": "ON"
       }
