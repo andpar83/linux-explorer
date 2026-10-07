@@ -14,7 +14,7 @@ if(NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
 endif()
 
 project(linux_explorer
-    VERSION 0.1.0
+    VERSION 0.1.1
     DESCRIPTION "Process Explorer-style live system inspector for Linux"
     LANGUAGES CXX)
 
