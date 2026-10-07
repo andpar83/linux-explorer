@@ -57,6 +57,10 @@ plain functions. What to know when touching UI code:
 
 - **Render loop** (`app.cpp`): render continuously only for a short while after input; otherwise
   sleep until the next refresh or an event. Idle CPU use must stay near zero.
+- **Be a good desktop citizen**: SDL disables the screensaver by default (it's a game library);
+  `app.cpp` re-enables it with `SDL_HINT_VIDEO_ALLOW_SCREENSAVER`, so the machine can blank and
+  suspend while the window is open. `SDL_SetAppMetadata` gives the desktop our name and the app
+  id `linux-explorer`, matching the desktop entry. Check with `gnome-session-inhibit --list`.
 - **Fonts**: ImGui 1.92 font API (`AddFontFromFileTTF` without a baked size, `style.FontSizeBase`,
   `style.FontScaleDpi`). The desktop UI font is used (Ubuntu Sans, then Noto, then DejaVu);
   Font Awesome 4 (`fonts-font-awesome`) is merged in for toolbar icons when installed.

@@ -7,6 +7,7 @@
 #include "lxe/ui/process_view.hpp"
 #include "lxe/ui/theme.hpp"
 #include "lxe/util/scope_exit.hpp"
+#include "lxe/version.hpp"
 
 #include <SDL3/SDL.h>
 #include <imgui.h>
@@ -225,6 +226,12 @@ struct Fonts
 
 int run(const proc::ProcFs& fs, const Options& options)
 {
+    // What the desktop sees: window title group, dock icon and inhibitor names. The identifier
+    // matches packaging/linux-explorer.desktop so GNOME can pair the window with the entry.
+    SDL_SetAppMetadata("Linux Explorer", std::string{version}.c_str(), "linux-explorer");
+    // SDL disables the screensaver by default, as games want; a monitor must let the machine
+    // blank and sleep.
+    SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         return report_sdl_error("cannot initialise SDL");
     }
