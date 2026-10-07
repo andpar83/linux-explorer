@@ -81,8 +81,9 @@ TEST_CASE("proc.live.smaps_and_pagemap_of_this_process")
     CHECK(last.exclusive);
     CHECK_FALSE(last.file_or_shared);
 
-    // Past the end of the address space the kernel returns nothing.
-    const auto beyond = fs.read_pagemap(self, (std::uint64_t{1} << 47U) / page, 4);
+    // Past the end of the address space the kernel returns nothing. Probe beyond even a 57-bit
+    // (5-level paging) user space: 1 << 47 is a valid address on such machines.
+    const auto beyond = fs.read_pagemap(self, (std::uint64_t{1} << 63U) / page, 4);
     REQUIRE(beyond.has_value());
     CHECK(beyond->empty());
 }
