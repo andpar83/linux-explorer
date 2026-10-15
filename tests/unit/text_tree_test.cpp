@@ -1,9 +1,10 @@
 #include "lxe/model/text_tree.hpp"
-#include "support/builders.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+
+#include "support/builders.hpp"
 
 using lxe::model::render_text_tree;
 using lxe::test::entry;
@@ -21,14 +22,16 @@ TEST_CASE("model.text_tree.draws_like_pstree")
         entry(100, 1, "bash"),
         entry(101, 100, "my (weird) prog"),
     });
-    CHECK(render_text_tree(model) == "systemd(1)\n"
-                                     "├─agetty(50)\n"
-                                     "├─sshd(60)\n"
-                                     "│ └─sshd(61)\n"
-                                     "└─bash(100)\n"
-                                     "  └─my (weird) prog(101)\n"
-                                     "kthreadd(2)\n"
-                                     "└─kworker/0:0H(3)\n");
+    CHECK(
+        render_text_tree(model) == "systemd(1)\n"
+                                   "├─agetty(50)\n"
+                                   "├─sshd(60)\n"
+                                   "│ └─sshd(61)\n"
+                                   "└─bash(100)\n"
+                                   "  └─my (weird) prog(101)\n"
+                                   "kthreadd(2)\n"
+                                   "└─kworker/0:0H(3)\n"
+    );
 }
 
 TEST_CASE("model.text_tree.empty_model_is_empty_text")

@@ -2,7 +2,6 @@
 // contain every process exactly once, with consistent parent/child links.
 #include "lxe/model/process_model.hpp"
 #include "lxe/model/text_tree.hpp"
-#include "support/builders.hpp"
 
 #include <catch2/catch_get_random_seed.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -10,6 +9,8 @@
 #include <algorithm>
 #include <numeric>
 #include <random>
+
+#include "support/builders.hpp"
 
 using lxe::test::entry;
 using lxe::test::make_model;

@@ -118,7 +118,9 @@ inline model::MappingInfo info(proc::MemoryMapping mapping)
 }
 
 /// A pagemap entry with the given flags.
-inline std::uint64_t pagemap_entry(bool present, bool swapped = false, bool exclusive = false, bool file_or_shared = false, bool soft_dirty = false)
+inline std::uint64_t pagemap_entry(
+    bool present, bool swapped = false, bool exclusive = false, bool file_or_shared = false, bool soft_dirty = false
+)
 {
     std::uint64_t entry = 0;
     entry |= present ? std::uint64_t{1} << 63U : 0;

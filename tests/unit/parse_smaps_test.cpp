@@ -1,11 +1,12 @@
 #include "lxe/proc/parse.hpp"
-#include "support/builders.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "support/builders.hpp"
 
 using lxe::proc::decode_pagemap;
 using lxe::proc::parse_smaps;
@@ -100,7 +101,10 @@ TEST_CASE("proc.parse_smaps.rejects_bad_input")
     CHECK(parse_smaps("00400000-00401000 r-xp 00000000 00:00 0\nRss: 4\n").error() == ParseError::truncated);
     CHECK(parse_smaps("00400000-00401000 r-xp 00000000 00:00 0\nRss: 4 MB\n").error() == ParseError::malformed);
     CHECK(parse_smaps("00400000-00401000 r-xp 00000000 00:00 0\nRss: four kB\n").error() == ParseError::bad_number);
-    CHECK(parse_smaps("00400000-00401000 r-xp 00000000 00:00 0\nRss: 99999999999999999999 kB\n").error() == ParseError::bad_number);
+    CHECK(
+        parse_smaps("00400000-00401000 r-xp 00000000 00:00 0\nRss: 99999999999999999999 kB\n").error() ==
+        ParseError::bad_number
+    );
     CHECK(parse_smaps("00400000-00401000 r-xp 00000000 00:00 0\nTHPeligible: 2\n").error() == ParseError::bad_number);
     CHECK(parse_smaps("junk line\n").error() == ParseError::truncated);
 }

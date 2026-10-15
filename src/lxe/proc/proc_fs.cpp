@@ -3,14 +3,14 @@
 #include "lxe/sys/file.hpp"
 #include "lxe/sys/unique_fd.hpp"
 
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <algorithm>
 #include <cerrno>
 #include <format>
 #include <span>
 #include <utility>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace lxe::proc {
 namespace {
@@ -24,9 +24,7 @@ constexpr std::size_t smaps_read_limit = 512 * 1024 * 1024;
 
 } // namespace
 
-ProcFs::ProcFs(std::filesystem::path root)
-: root_{std::move(root)}
-{}
+ProcFs::ProcFs(std::filesystem::path root) : root_{std::move(root)} {}
 
 std::expected<std::vector<ProcessId>, std::error_code> ProcFs::list_processes() const
 {
@@ -80,11 +78,8 @@ std::expected<std::vector<SmapsEntry>, std::error_code> ProcFs::read_smaps(Proce
     return sys::read_file(root_ / std::format("{}", pid) / "smaps", smaps_read_limit).and_then(parse_smaps);
 }
 
-std::expected<std::vector<std::uint64_t>, std::error_code> ProcFs::read_pagemap(
-    ProcessId pid,
-    std::uint64_t first_page,
-    std::size_t count
-) const
+std::expected<std::vector<std::uint64_t>, std::error_code>
+ProcFs::read_pagemap(ProcessId pid, std::uint64_t first_page, std::size_t count) const
 {
     constexpr std::size_t entry_bytes = sizeof(std::uint64_t);
     const auto path = root_ / std::format("{}", pid) / "pagemap";

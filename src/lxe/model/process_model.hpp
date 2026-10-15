@@ -49,11 +49,20 @@ public:
     /// or when it sits on a parent cycle (impossible in a real kernel, possible in corrupt input).
     explicit ProcessTree(std::span<const ProcessEntry> processes);
 
-    [[nodiscard]] std::span<const std::size_t> roots() const noexcept { return roots_; }
+    [[nodiscard]] std::span<const std::size_t> roots() const noexcept
+    {
+        return roots_;
+    }
 
-    [[nodiscard]] std::span<const std::size_t> children(std::size_t index) const { return children_.at(index); }
+    [[nodiscard]] std::span<const std::size_t> children(std::size_t index) const
+    {
+        return children_.at(index);
+    }
 
-    [[nodiscard]] std::size_t size() const noexcept { return children_.size(); }
+    [[nodiscard]] std::size_t size() const noexcept
+    {
+        return children_.size();
+    }
 
 private:
     std::vector<std::size_t> roots_;

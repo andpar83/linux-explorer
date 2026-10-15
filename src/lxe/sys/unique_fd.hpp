@@ -1,8 +1,8 @@
 #pragma once
 
-#include <unistd.h>
-
 #include <utility>
+
+#include <unistd.h>
 
 namespace lxe::sys {
 
@@ -12,16 +12,12 @@ class UniqueFd
 public:
     UniqueFd() noexcept = default;
 
-    explicit UniqueFd(int fd) noexcept
-    : fd_{fd}
-    {}
+    explicit UniqueFd(int fd) noexcept : fd_{fd} {}
 
     UniqueFd(const UniqueFd&) = delete;
     UniqueFd& operator=(const UniqueFd&) = delete;
 
-    UniqueFd(UniqueFd&& other) noexcept
-    : fd_{std::exchange(other.fd_, -1)}
-    {}
+    UniqueFd(UniqueFd&& other) noexcept : fd_{std::exchange(other.fd_, -1)} {}
 
     UniqueFd& operator=(UniqueFd&& other) noexcept
     {
@@ -31,11 +27,20 @@ public:
         return *this;
     }
 
-    ~UniqueFd() { reset(); }
+    ~UniqueFd()
+    {
+        reset();
+    }
 
-    [[nodiscard]] int get() const noexcept { return fd_; }
+    [[nodiscard]] int get() const noexcept
+    {
+        return fd_;
+    }
 
-    [[nodiscard]] bool valid() const noexcept { return fd_ >= 0; }
+    [[nodiscard]] bool valid() const noexcept
+    {
+        return fd_ >= 0;
+    }
 
     void reset(int fd = -1) noexcept
     {

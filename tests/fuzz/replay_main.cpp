@@ -24,8 +24,7 @@ int main(int argc, char* argv[])
                     inputs.push_back(file.path());
                 }
             }
-        }
-        else {
+        } else {
             inputs.push_back(path);
         }
     }

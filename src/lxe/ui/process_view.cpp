@@ -2,10 +2,6 @@
 
 #include "lxe/model/format.hpp"
 
-#include <imgui.h>
-
-#include <system_error>
-
 #include <algorithm>
 #include <bit>
 #include <cstdint>
@@ -16,8 +12,11 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
+
+#include <imgui.h>
 
 namespace lxe::ui {
 namespace {
@@ -64,12 +63,8 @@ void text_right_aligned(std::string_view s)
     text(s);
 }
 
-[[nodiscard]] std::string button_label(
-    const ViewConfig& config,
-    std::string_view icon,
-    std::string_view caption,
-    std::string_view id
-)
+[[nodiscard]] std::string
+button_label(const ViewConfig& config, std::string_view icon, std::string_view caption, std::string_view id)
 {
     // "###id" keeps the widget id stable while the visible caption changes (Pause <-> Resume).
     return config.icons ? std::format("{}  {}###{}", icon, caption, id) : std::format("{}###{}", caption, id);
@@ -205,12 +200,8 @@ void row_tooltip(const model::ProcessEntry& process)
 }
 
 /// Draws one table row; returns true when its tree node is open and has pushed a tree level.
-[[nodiscard]] bool draw_row(
-    const model::ProcessEntry& process,
-    bool has_children,
-    ViewState& state,
-    const ViewConfig& config
-)
+[[nodiscard]] bool
+draw_row(const model::ProcessEntry& process, bool has_children, ViewState& state, const ViewConfig& config)
 {
     ImGui::TableNextRow();
     if (process.uid == config.current_user && !process.kernel_thread) {
@@ -225,8 +216,7 @@ void row_tooltip(const model::ProcessEntry& process)
                                ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_DrawLinesToNodes;
     if (!has_children) {
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-    }
-    else if (!process.kernel_thread) {
+    } else if (!process.kernel_thread) {
         flags |= ImGuiTreeNodeFlags_DefaultOpen; // kthreadd's hundreds of workers start collapsed
     }
     if (state.selected == process.pid) {
@@ -280,6 +270,7 @@ void draw_rows(const model::Model& model, ViewState& state, const ViewConfig& co
         std::size_t next = 0;
         bool pushed = false; ///< A tree node was pushed for this level and must be popped.
     };
+
     // Roots are drawn one tree level down, with the indent cancelled out. ImGui 1.92.9 computes
     // `1 << (depth - 1)` for a clipped node at depth 0 when tree lines are on, which is undefined
     // behaviour; at depth 1 the expression is valid and the dummy level stores no line data.
@@ -301,12 +292,10 @@ void draw_rows(const model::Model& model, ViewState& state, const ViewConfig& co
         const auto children = model.tree.children(node);
         if (children.empty()) {
             std::ignore = draw_row(model.processes.at(node), false, state, config);
-        }
-        else if (nesting >= max_nesting) {
+        } else if (nesting >= max_nesting) {
             std::ignore = draw_row(model.processes.at(node), false, state, config);
             stack.push_back(Level{.nodes = children, .next = 0, .pushed = false});
-        }
-        else if (draw_row(model.processes.at(node), true, state, config)) {
+        } else if (draw_row(model.processes.at(node), true, state, config)) {
             stack.push_back(Level{.nodes = children, .next = 0, .pushed = true});
             ++nesting;
         }
@@ -333,7 +322,8 @@ void draw_table(const model::Model& model, ViewState& state, const ViewConfig& c
 [[nodiscard]] std::string describe(const std::error_code& error, const model::ProcessEntry* process)
 {
     if (error == std::errc::permission_denied) {
-        const std::string owner = process != nullptr ? std::format("it runs as user {}", process->user) : "another user's process";
+        const std::string owner =
+            process != nullptr ? std::format("it runs as user {}", process->user) : "another user's process";
         return std::format("permission denied ({}; reading another user's memory needs root or CAP_SYS_PTRACE)", owner);
     }
     if (error == std::errc::no_such_file_or_directory) {
@@ -418,7 +408,9 @@ void draw_maps_table(const model::ProcessDetails& details, ViewState& state, con
             }
             // The address is unique within the process, so it serves as the row's id.
             const bool selected = state.selected_mapping == mapping.start;
-            if (ImGui::Selectable(std::format("{:016x}", mapping.start).c_str(), selected, ImGuiSelectableFlags_SpanAllColumns)) {
+            if (ImGui::Selectable(
+                    std::format("{:016x}", mapping.start).c_str(), selected, ImGuiSelectableFlags_SpanAllColumns
+                )) {
                 state.selected_mapping = mapping.start;
             }
             if (config.mono_font != nullptr) {
@@ -451,8 +443,7 @@ void draw_maps_table(const model::ProcessDetails& details, ViewState& state, con
                 ImGui::PushStyleColor(ImGuiCol_Text, config.palette.kernel_thread_text);
                 text("(anonymous)");
                 ImGui::PopStyleColor();
-            }
-            else {
+            } else {
                 text(mapping.path);
             }
         }
@@ -486,7 +477,8 @@ void draw_presence_strip(const model::PageSummary& summary, const ViewConfig& co
     std::optional<std::size_t> hovered_column;
     if (ImGui::IsItemHovered() && columns > 0) {
         const float x = ImGui::GetIO().MousePos.x - origin.x;
-        hovered_column = std::min(static_cast<std::size_t>(std::max(x, 0.0F) / width * static_cast<float>(columns)), columns - 1);
+        hovered_column =
+            std::min(static_cast<std::size_t>(std::max(x, 0.0F) / width * static_cast<float>(columns)), columns - 1);
     }
     for (std::size_t column = 0; column < columns; ++column) {
         const std::size_t from = column * summary.buckets.size() / columns;
@@ -510,7 +502,8 @@ void draw_presence_strip(const model::PageSummary& summary, const ViewConfig& co
         const float x1 = origin.x + width * static_cast<float>(column + 1) / static_cast<float>(columns);
         draw->AddRectFilled(ImVec2{x0, origin.y}, ImVec2{x1, corner.y}, color);
         if (hovered_column == column) {
-            const std::uint64_t first_page = static_cast<std::uint64_t>(from) * summary.examined / summary.buckets.size();
+            const std::uint64_t first_page =
+                static_cast<std::uint64_t>(from) * summary.examined / summary.buckets.size();
             ImGui::SetTooltip(
                 "pages from %llu: %u present, %u swapped, %u not present",
                 static_cast<unsigned long long>(first_page),
@@ -585,30 +578,36 @@ void draw_pages_panel(const model::ProcessDetails& details, const ViewConfig& co
         return;
     }
     const proc::MemoryMapping& mapping = info->mapping;
-    mono_text(std::format("{:016x}-{:016x}  {}", mapping.start, mapping.end, model::format_permissions(mapping)), config);
+    mono_text(
+        std::format("{:016x}-{:016x}  {}", mapping.start, mapping.end, model::format_permissions(mapping)), config
+    );
     text(mapping.path.empty() ? std::string_view{"(anonymous)"} : std::string_view{mapping.path});
 
     if (details.pages_error) {
         text(std::format("Pages: {}", describe(details.pages_error, nullptr)));
-    }
-    else if (details.pages) {
+    } else if (details.pages) {
         const model::PageSummary& pages = *details.pages;
         draw_presence_strip(pages, config);
-        text(std::format(
-            "Present {} ({})   Swapped {}   Not present {}{}",
-            pages.present,
-            model::format_bytes(pages.present * pages.page_bytes),
-            pages.swapped,
-            pages.absent(),
-            pages.sampled() ? std::format("   (sampled {} of {} pages)", pages.examined, pages.pages) : std::string{}
-        ));
-        text(std::format(
-            "Exclusive {}   File or shared {}   Soft-dirty {}   Page size {}",
-            pages.exclusive,
-            pages.file_or_shared,
-            pages.soft_dirty,
-            model::format_bytes(pages.page_bytes)
-        ));
+        text(
+            std::format(
+                "Present {} ({})   Swapped {}   Not present {}{}",
+                pages.present,
+                model::format_bytes(pages.present * pages.page_bytes),
+                pages.swapped,
+                pages.absent(),
+                pages.sampled() ? std::format("   (sampled {} of {} pages)", pages.examined, pages.pages)
+                                : std::string{}
+            )
+        );
+        text(
+            std::format(
+                "Exclusive {}   File or shared {}   Soft-dirty {}   Page size {}",
+                pages.exclusive,
+                pages.file_or_shared,
+                pages.soft_dirty,
+                model::format_bytes(pages.page_bytes)
+            )
+        );
     }
     if (info->stats) {
         ImGui::Separator();
@@ -616,7 +615,9 @@ void draw_pages_panel(const model::ProcessDetails& details, const ViewConfig& co
     }
 }
 
-void draw_details_content(const model::Model& model, const model::ProcessDetails& details, ViewState& state, const ViewConfig& config)
+void draw_details_content(
+    const model::Model& model, const model::ProcessDetails& details, ViewState& state, const ViewConfig& config
+)
 {
     if (!details.pid) {
         ImGui::PushStyleColor(ImGuiCol_Text, config.palette.muted_text);
@@ -631,13 +632,15 @@ void draw_details_content(const model::Model& model, const model::ProcessDetails
         text(std::format("Memory maps of {} ({}): {}", name, *details.pid, describe(details.error, process)));
         return;
     }
-    text(std::format(
-        "Memory maps of {} ({}): {} mappings, {} mapped",
-        name,
-        *details.pid,
-        details.maps.size(),
-        model::format_bytes(details.mapped_bytes())
-    ));
+    text(
+        std::format(
+            "Memory maps of {} ({}): {} mappings, {} mapped",
+            name,
+            *details.pid,
+            details.maps.size(),
+            model::format_bytes(details.mapped_bytes())
+        )
+    );
     // Maps on the left, the selected mapping's pages on the right.
     const float em = ImGui::GetFontSize();
     const float available = ImGui::GetContentRegionAvail().x;
@@ -672,22 +675,24 @@ void draw_maps_page(
 void draw_status_bar(const model::SystemSummary& summary, const ViewState& state, const ViewConfig& config)
 {
     constexpr double hundred = 100.0;
-    const double memory_percent =
-        summary.memory_total_bytes == 0
-            ? 0.0
-            : hundred * static_cast<double>(summary.memory_used_bytes) / static_cast<double>(summary.memory_total_bytes);
+    const double memory_percent = summary.memory_total_bytes == 0
+                                      ? 0.0
+                                      : hundred * static_cast<double>(summary.memory_used_bytes) /
+                                            static_cast<double>(summary.memory_total_bytes);
     const std::string cpu = summary.cpu_percent ? std::format("{:.1f}%", *summary.cpu_percent) : std::string{"-"};
 
     ImGui::PushStyleColor(ImGuiCol_Text, config.palette.muted_text);
-    text(std::format(
-        "CPU Usage: {}     Memory: {:.1f}% ({} of {})     Processes: {}     Threads: {}",
-        cpu,
-        memory_percent,
-        model::format_bytes(summary.memory_used_bytes),
-        model::format_bytes(summary.memory_total_bytes),
-        summary.processes,
-        summary.threads
-    ));
+    text(
+        std::format(
+            "CPU Usage: {}     Memory: {:.1f}% ({} of {})     Processes: {}     Threads: {}",
+            cpu,
+            memory_percent,
+            model::format_bytes(summary.memory_used_bytes),
+            model::format_bytes(summary.memory_total_bytes),
+            summary.processes,
+            summary.threads
+        )
+    );
     ImGui::PopStyleColor();
     if (state.paused) {
         ImGui::SameLine(0.0F, ImGui::GetFontSize() * 2.0F);
@@ -700,10 +705,7 @@ void draw_status_bar(const model::SystemSummary& summary, const ViewState& state
 } // namespace
 
 FrameRequests draw_main_window(
-    const model::Model& model,
-    const model::ProcessDetails& details,
-    ViewState& state,
-    const ViewConfig& config
+    const model::Model& model, const model::ProcessDetails& details, ViewState& state, const ViewConfig& config
 )
 {
     FrameRequests requests;

@@ -74,9 +74,8 @@ TEST_CASE("proc.parse_stat.accepts_an_empty_comm")
 
 TEST_CASE("proc.parse_stat.detects_kernel_threads")
 {
-    const auto stat = parse_stat(
-        "2 (kthreadd) S 0 0 0 0 -1 2129984 0 0 0 0 0 4 0 0 20 0 1 0 22 0 0 18446744073709551615 0 0 0 0\n"
-    );
+    const auto stat =
+        parse_stat("2 (kthreadd) S 0 0 0 0 -1 2129984 0 0 0 0 0 4 0 0 20 0 1 0 22 0 0 18446744073709551615 0 0 0 0\n");
     REQUIRE(stat.has_value());
     CHECK(stat->is_kernel_thread());
 }

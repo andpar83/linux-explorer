@@ -1,11 +1,12 @@
 #include "lxe/model/process_model.hpp"
-#include "support/builders.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
 #include <numeric>
 #include <vector>
+
+#include "support/builders.hpp"
 
 using lxe::model::ProcessTree;
 using lxe::test::entry;

@@ -1,8 +1,9 @@
 #include "lxe/model/sampler.hpp"
-#include "support/builders.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include "support/builders.hpp"
 
 using Catch::Approx;
 using lxe::model::Sampler;
@@ -21,7 +22,12 @@ TEST_CASE("model.sampler.first_sample_has_no_cpu_figures")
     Sampler sampler{page_size, fake_users()};
     const auto model = sampler.update(snapshot(
         {{.pid = 1, .comm = "init", .cpu_ticks = 50, .resident_pages = 10, .uid = 0, .threads = 1},
-         {.pid = 7, .ppid = 1, .comm = "app", .resident_pages = 3, .uid = 1000, .threads = 4,
+         {.pid = 7,
+          .ppid = 1,
+          .comm = "app",
+          .resident_pages = 3,
+          .uid = 1000,
+          .threads = 4,
           .command_line = {"/bin/app", "--fast"}}},
         CpuTimes{.total_ticks = 1000, .idle_ticks = 900}
     ));
@@ -45,12 +51,12 @@ TEST_CASE("model.sampler.first_sample_has_no_cpu_figures")
 TEST_CASE("model.sampler.cpu_usage_is_relative_to_all_cpus")
 {
     Sampler sampler{page_size, fake_users()};
-    std::ignore = sampler.update(
-        snapshot({{.pid = 1, .cpu_ticks = 100, .start_time_ticks = 5}}, CpuTimes{.total_ticks = 10'000, .idle_ticks = 8'000})
-    );
-    const auto model = sampler.update(
-        snapshot({{.pid = 1, .cpu_ticks = 200, .start_time_ticks = 5}}, CpuTimes{.total_ticks = 11'000, .idle_ticks = 8'750})
-    );
+    std::ignore = sampler.update(snapshot(
+        {{.pid = 1, .cpu_ticks = 100, .start_time_ticks = 5}}, CpuTimes{.total_ticks = 10'000, .idle_ticks = 8'000}
+    ));
+    const auto model = sampler.update(snapshot(
+        {{.pid = 1, .cpu_ticks = 200, .start_time_ticks = 5}}, CpuTimes{.total_ticks = 11'000, .idle_ticks = 8'750}
+    ));
     REQUIRE(model.processes[0].cpu_percent.has_value());
     CHECK(*model.processes[0].cpu_percent == Approx(10.0));
     REQUIRE(model.summary.cpu_percent.has_value());
@@ -60,7 +66,8 @@ TEST_CASE("model.sampler.cpu_usage_is_relative_to_all_cpus")
 TEST_CASE("model.sampler.reused_pid_is_a_new_process")
 {
     Sampler sampler{page_size, fake_users()};
-    std::ignore = sampler.update(snapshot({{.pid = 9, .cpu_ticks = 500, .start_time_ticks = 1}}, CpuTimes{.total_ticks = 100}));
+    std::ignore =
+        sampler.update(snapshot({{.pid = 9, .cpu_ticks = 500, .start_time_ticks = 1}}, CpuTimes{.total_ticks = 100}));
     const auto model =
         sampler.update(snapshot({{.pid = 9, .cpu_ticks = 10, .start_time_ticks = 2}}, CpuTimes{.total_ticks = 200}));
     CHECK_FALSE(model.processes[0].cpu_percent.has_value());
@@ -69,11 +76,13 @@ TEST_CASE("model.sampler.reused_pid_is_a_new_process")
 TEST_CASE("model.sampler.tolerates_counters_that_go_backwards")
 {
     Sampler sampler{page_size, fake_users()};
-    std::ignore = sampler.update(snapshot({{.pid = 1, .cpu_ticks = 500}}, CpuTimes{.total_ticks = 100, .idle_ticks = 50}));
+    std::ignore =
+        sampler.update(snapshot({{.pid = 1, .cpu_ticks = 500}}, CpuTimes{.total_ticks = 100, .idle_ticks = 50}));
 
     SECTION("process ticks decrease: 0%")
     {
-        const auto model = sampler.update(snapshot({{.pid = 1, .cpu_ticks = 400}}, CpuTimes{.total_ticks = 200, .idle_ticks = 40}));
+        const auto model =
+            sampler.update(snapshot({{.pid = 1, .cpu_ticks = 400}}, CpuTimes{.total_ticks = 200, .idle_ticks = 40}));
         CHECK(model.processes[0].cpu_percent == 0.0);
         CHECK(model.summary.cpu_percent == 100.0);
     }

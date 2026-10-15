@@ -1,11 +1,12 @@
 #include "lxe/proc/proc_fs.hpp"
-#include "test_paths.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
 #include <string>
 #include <vector>
+
+#include "test_paths.hpp"
 
 using lxe::ProcessId;
 using lxe::UserId;
@@ -25,8 +26,16 @@ TEST_CASE("proc.proc_fs.lists_only_process_directories")
     const auto pids = fixture_proc().list_processes();
     REQUIRE(pids.has_value());
     const std::vector<ProcessId> expected{
-        ProcessId{1}, ProcessId{2}, ProcessId{3}, ProcessId{50}, ProcessId{60}, ProcessId{61}, ProcessId{100},
-        ProcessId{101}, ProcessId{102}};
+        ProcessId{1},
+        ProcessId{2},
+        ProcessId{3},
+        ProcessId{50},
+        ProcessId{60},
+        ProcessId{61},
+        ProcessId{100},
+        ProcessId{101},
+        ProcessId{102}
+    };
     CHECK(*pids == expected);
 }
 
@@ -58,8 +67,15 @@ TEST_CASE("proc.proc_fs.snapshot_skips_processes_that_cannot_be_read")
     }
     // 102 has no status file: it "exited" while being read.
     const std::vector<ProcessId> expected{
-        ProcessId{1}, ProcessId{2}, ProcessId{3}, ProcessId{50}, ProcessId{60}, ProcessId{61}, ProcessId{100},
-        ProcessId{101}};
+        ProcessId{1},
+        ProcessId{2},
+        ProcessId{3},
+        ProcessId{50},
+        ProcessId{60},
+        ProcessId{61},
+        ProcessId{100},
+        ProcessId{101}
+    };
     CHECK(pids == expected);
     CHECK(snapshot->system.cpu.total_ticks == 60'377'929U);
     CHECK(snapshot->system.cpu.idle_ticks == 46'845'166U);

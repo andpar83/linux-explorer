@@ -49,7 +49,8 @@ Cpp11BracedListStyle: true
 SpaceBeforeCpp11BracedList: false
 InsertBraces: true
 InsertNewlineAtEOF: true
-RemoveSemicolon: true
+# No RemoveSemicolon: it drops the `;` that macro blocks such as Catch2's BENCHMARK("x") { ... };
+# need, and -Wextra-semi already makes a stray semicolon a compile error.
 SeparateDefinitionBlocks: Always
 MaxEmptyLinesToKeep: 1
 FixNamespaceComments: true

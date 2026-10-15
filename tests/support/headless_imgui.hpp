@@ -1,12 +1,12 @@
 #pragma once
 
-#include <imgui.h>
-#include <imgui_impl_null.h>
-#include <imgui_internal.h>
-
 #include <string>
 #include <string_view>
 #include <utility>
+
+#include <imgui.h>
+#include <imgui_impl_null.h>
+#include <imgui_internal.h>
 
 namespace lxe::test {
 
@@ -33,7 +33,10 @@ public:
     }
 
     /// Window size for the next frames; small sizes make rows scroll out of view (clipping).
-    void set_display_size(float width, float height) { display_size_ = ImVec2{width, height}; }
+    void set_display_size(float width, float height)
+    {
+        display_size_ = ImVec2{width, height};
+    }
 
     /// Runs one frame around `draw` and returns what it returned.
     template <class Draw>

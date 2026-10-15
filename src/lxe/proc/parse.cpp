@@ -16,7 +16,10 @@ namespace {
 class ParseErrorCategory final : public std::error_category
 {
 public:
-    [[nodiscard]] const char* name() const noexcept override { return "lxe.proc.parse"; }
+    [[nodiscard]] const char* name() const noexcept override
+    {
+        return "lxe.proc.parse";
+    }
 
     [[nodiscard]] std::string message(int value) const override
     {
@@ -124,10 +127,8 @@ template <std::integral T>
 }
 
 /// Value of a "Key: <number> kB" line in /proc/meminfo, in bytes; nullopt when the key is absent.
-[[nodiscard]] std::expected<std::optional<std::uint64_t>, std::error_code> meminfo_value(
-    std::string_view text,
-    std::string_view key
-)
+[[nodiscard]] std::expected<std::optional<std::uint64_t>, std::error_code>
+meminfo_value(std::string_view text, std::string_view key)
 {
     for (const std::string_view line : lines(text)) {
         if (!line.starts_with(key)) {
@@ -198,13 +199,12 @@ std::expected<StatInfo, std::error_code> parse_stat(std::string_view text)
     info.state = ProcessState{fields[0].front()};
 
     pid_t ppid = 0;
-    const bool numbers_ok = assign_number(fields[1], ppid) && assign_number(fields[6], info.flags) &&
-                            assign_number(fields[11], info.utime_ticks) &&
-                            assign_number(fields[12], info.stime_ticks) && assign_number(fields[15], info.priority) &&
-                            assign_number(fields[16], info.nice) && assign_number(fields[17], info.threads) &&
-                            assign_number(fields[19], info.start_time_ticks) &&
-                            assign_number(fields[20], info.virtual_bytes) &&
-                            assign_number(fields[21], info.resident_pages);
+    const bool numbers_ok =
+        assign_number(fields[1], ppid) && assign_number(fields[6], info.flags) &&
+        assign_number(fields[11], info.utime_ticks) && assign_number(fields[12], info.stime_ticks) &&
+        assign_number(fields[15], info.priority) && assign_number(fields[16], info.nice) &&
+        assign_number(fields[17], info.threads) && assign_number(fields[19], info.start_time_ticks) &&
+        assign_number(fields[20], info.virtual_bytes) && assign_number(fields[21], info.resident_pages);
     if (!numbers_ok) {
         return fail(ParseError::bad_number);
     }
@@ -437,15 +437,13 @@ std::expected<std::vector<SmapsEntry>, std::error_code> parse_smaps(std::string_
             while (const auto flag = take_field(rest)) {
                 stats.vm_flags.emplace_back(*flag);
             }
-        }
-        else if (*first == "THPeligible:") {
+        } else if (*first == "THPeligible:") {
             const auto value = take_field(rest).and_then([](std::string_view v) { return to_number<int>(v); });
             if (!value || (*value != 0 && *value != 1)) {
                 return fail(ParseError::bad_number);
             }
             stats.thp_eligible = *value == 1;
-        }
-        else if (const auto field = smaps_field(*first); field != nullptr) {
+        } else if (const auto field = smaps_field(*first); field != nullptr) {
             const auto value = take_field(rest);
             const auto unit = take_field(rest);
             if (!value || !unit) {

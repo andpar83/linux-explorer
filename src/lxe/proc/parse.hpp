@@ -68,9 +68,15 @@ struct StatInfo
     std::uint64_t virtual_bytes = 0;
     std::int64_t resident_pages = 0;
 
-    [[nodiscard]] bool is_kernel_thread() const noexcept { return (flags & pf_kthread) != 0; }
+    [[nodiscard]] bool is_kernel_thread() const noexcept
+    {
+        return (flags & pf_kthread) != 0;
+    }
 
-    [[nodiscard]] std::uint64_t cpu_ticks() const noexcept { return utime_ticks + stime_ticks; }
+    [[nodiscard]] std::uint64_t cpu_ticks() const noexcept
+    {
+        return utime_ticks + stime_ticks;
+    }
 
     friend bool operator==(const StatInfo&, const StatInfo&) = default;
 };
@@ -117,7 +123,10 @@ struct MemoryMapping
     std::uint64_t inode = 0;
     std::string path; ///< File, "[heap]", "[stack]", "[vdso]", "[anon:name]"...; empty for anonymous memory.
 
-    [[nodiscard]] std::uint64_t size() const noexcept { return end - start; }
+    [[nodiscard]] std::uint64_t size() const noexcept
+    {
+        return end - start;
+    }
 
     friend bool operator==(const MemoryMapping&, const MemoryMapping&) = default;
 };

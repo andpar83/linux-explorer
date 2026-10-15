@@ -6,11 +6,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <unistd.h>
-
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+
+#include <unistd.h>
 
 using lxe::ProcessId;
 using lxe::UserId;

@@ -1,16 +1,17 @@
 #include "lxe/model/details.hpp"
 #include "lxe/proc/proc_fs.hpp"
 #include "lxe/sys/system.hpp"
-#include "support/builders.hpp"
-#include "test_paths.hpp"
 
 #include <catch2/catch_test_macros.hpp>
-
-#include <unistd.h>
 
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
+
+#include <unistd.h>
+
+#include "support/builders.hpp"
+#include "test_paths.hpp"
 
 using lxe::ProcessId;
 using lxe::proc::ProcFs;
@@ -148,7 +149,8 @@ TEST_CASE("model.load_details.reads_maps_or_records_the_error")
     CHECK(gone.error == std::errc::no_such_file_or_directory);
 
     // A selected mapping of a fixture process: no pagemap file, so pages can't be read.
-    const auto selected = lxe::model::load_details(fs, DetailsRequest{.pid = ProcessId{100}, .mapping = 0x558367a0a000}, 4096);
+    const auto selected =
+        lxe::model::load_details(fs, DetailsRequest{.pid = ProcessId{100}, .mapping = 0x558367a0a000}, 4096);
     REQUIRE(selected.selected() != nullptr);
     CHECK_FALSE(selected.pages.has_value());
     CHECK(selected.pages_error == std::errc::no_such_file_or_directory);

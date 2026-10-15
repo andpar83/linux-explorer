@@ -15,7 +15,8 @@ using Args = std::vector<std::string>;
 
 TEST_CASE("proc.parse_status.reads_real_and_effective_uid")
 {
-    const auto status = parse_status("Name:\tsudo\nUmask:\t0022\nState:\tS (sleeping)\nUid:\t1000\t0\t0\t0\nGid:\t1000\n");
+    const auto status =
+        parse_status("Name:\tsudo\nUmask:\t0022\nState:\tS (sleeping)\nUid:\t1000\t0\t0\t0\nGid:\t1000\n");
     REQUIRE(status.has_value());
     CHECK(status->real_uid == UserId{1000});
     CHECK(status->effective_uid == UserId{0});
