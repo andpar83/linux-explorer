@@ -105,6 +105,7 @@ plain functions. What to know when touching UI code:
 | Dear ImGui | 1.92.9b, `FetchContent` with SHA256 (`cmake/Dependencies.cmake`) | Built here as `imgui::imgui`, `imgui::sdl3_opengl3` (app), `imgui::null` (tests). Bump URL and hash together. |
 | Catch2    | 3.16.0, `FetchContent` with SHA256 (`tests/CMakeLists.txt`) | Unit/integration/property/UI tests and benchmarks. |
 | Fonts/icons | runtime, optional | Ubuntu Sans / Noto / DejaVu for text; `fonts-font-awesome` for toolbar icons. Missing fonts fall back to ImGui's built-in font and text-only buttons. |
+| Formatter | clang-format 21: `sudo apt install clang-format` (Ubuntu's default is 21) | `.clang-format` at the root. The pre-commit hook (`.githooks/pre-commit`) checks staged C++ files with it and refuses the commit otherwise; it insists on major version 21 because each major formats a little differently. Bumping the major means reformatting the tree in one commit and changing `required_major` in the hook. |
 | Packaging | CPack DEB (`cmake/Packaging.cmake`) | `cmake --build --preset release --target package` makes `build/release/linux-explorer_<version>_amd64.deb`. Installs only the binary, `packaging/linux-explorer.desktop` and LICENSE as `copyright`; never tests or third-party code. Runtime dependencies come from `dpkg-shlibdeps` (package `dpkg-dev`). |
 | License   | MIT (`LICENSE`) | One file for the project; no per-file headers. Dependencies: ImGui MIT, Catch2 BSL-1.0, SDL3 zlib. |
 | Build dirs | `build/<preset>/` (CLI), `cmake-build-*/` (CLion) | Both git-ignored. Never build in-source. |
@@ -163,7 +164,8 @@ C++20 modules and `import std` are not used.
 ### Commands
 
 ```sh
-sudo apt install libsdl3-dev fonts-font-awesome   # once
+sudo apt install libsdl3-dev fonts-font-awesome clang-format   # once
+git config core.hooksPath .githooks                # once per clone: format check before each commit
 cmake --workflow --preset asan                     # configure + build + test
 cmake --workflow --preset tsan
 cmake --workflow --preset release
@@ -255,7 +257,10 @@ Releasing: bump `project(VERSION ...)` in `CMakeLists.txt`, commit, wait for gre
   functions, variables, namespaces, files, constants `snake_case`; private/protected members
   `snake_case_`. No Hungarian notation, no abbreviations that need explaining.
 - **Formatting**: `.clang-format` is the law (4 spaces, 120 columns, braces on their own line
-  for functions/types, attached for control flow). Run it before committing.
+  for functions/types, attached for control flow). `clang-format-21 -i <files>` before committing;
+  the pre-commit hook rejects anything else. A hand-laid-out table that the formatter would mangle
+  (the suppression list in `sanitizer_defaults.cpp`) goes between `// clang-format off` / `on`
+  with the reason on the `off` line; nothing else does.
 - **Comments**: explain *why*, not *what*. `///` Doxygen on public API. No commented-out code.
 
 ## Testing policy: every kind of test, always
@@ -310,6 +315,7 @@ CMakeLists.txt          root: compiler choice, language level, build-wide instru
 CMakePresets.json       configure/build/test/workflow presets
 cmake/                  CompilerWarnings, Sanitizers, Hardening, Dependencies (SDL3, ImGui), Packaging (CPack DEB)
 packaging/              desktop entry installed by the package
+.githooks/              pre-commit: clang-format check of staged C++ files
 .github/workflows/      CI: sanitizer runs, release build, .deb artifact and GitHub Releases
 docs/                   README screenshot
 LICENSE                 MIT
@@ -332,6 +338,8 @@ CLAUDE.md               this file; README.md: short public overview
 - One logical change per commit; every commit builds and passes the definition of done.
 - Never commit build output, IDE state, or secrets. `.gitignore` covers `build/`,
   `cmake-build-*/`, `.idea/`.
+- Hooks live in `.githooks/` (enabled with `git config core.hooksPath .githooks`). Don't bypass
+  them with `--no-verify`; fix what they report.
 
 ## Ask before
 

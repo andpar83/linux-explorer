@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Refuses a commit whose staged C++ files don't match .clang-format. Checks the staged content,
+# not the working tree, so partially staged files are judged by what is actually committed.
+# Enable once per clone: git config core.hooksPath .githooks
+set -euo pipefail
+
+# clang-format's output changes between major versions; everyone formats with the same one.
+readonly required_major=21
+
+formatter=""
+for candidate in "clang-format-${required_major}" clang-format; do
+    if command -v "$candidate" >/dev/null &&
+        "$candidate" --version | grep -q "version ${required_major}\."; then
+        formatter=$candidate
+        break
+    fi
+done
+if [[ -z "$formatter" ]]; then
+    echo "pre-commit: clang-format ${required_major} not found; install it: sudo apt install clang-format-${required_major}" >&2
+    exit 1
+fi
+
+mapfile -d '' files < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.cpp' '*.hpp' '*.h' '*.cc')
+unformatted=()
+for file in "${files[@]}"; do
+    if ! git show ":$file" | "$formatter" --style=file --assume-filename="$file" | cmp -s - <(git show ":$file"); then
+        unformatted+=("$file")
+    fi
+done
+
+if ((${#unformatted[@]} > 0)); then
+    echo "pre-commit: these staged files are not formatted:" >&2
+    printf '  %s\n' "${unformatted[@]}" >&2
+    quoted=$(printf ' %q' "${unformatted[@]}")
+    echo "Fix with: $formatter -i$quoted && git add$quoted" >&2
+    exit 1
+fi

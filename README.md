@@ -43,6 +43,9 @@ Other presets: `asan`, `tsan`, `ubsan`, `debug`, `analyze` (`cmake --list-preset
 `cmake` isn't on PATH, CLion's bundled copy works (see `CLAUDE.md`), or
 `sudo apt install cmake ninja-build`.
 
+Contributing: install `clang-format` (version 21) and enable the pre-commit hook once per clone
+with `git config core.hooksPath .githooks`; it refuses commits whose C++ isn't formatted.
+
 ## Usage
 
 ```
