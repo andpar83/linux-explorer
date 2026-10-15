@@ -19,7 +19,7 @@ struct Options
     /// Process selected when the window opens.
     std::optional<ProcessId> selected;
     /// Mapping of that process selected when the window opens: a start address in hex, or a
-    /// path as the maps list shows it (e.g. "[heap]").
+    /// path as the maps list shows it (e.g. "[heap]"). The window then opens on the maps page.
     std::optional<std::string> selected_mapping;
 };
 

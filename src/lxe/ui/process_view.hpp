@@ -19,14 +19,20 @@ enum class ExpandRequest
     collapse_all,
 };
 
+/// What fills the window between the toolbar and the status bar.
+enum class Page
+{
+    processes,   ///< The process tree.
+    memory_maps, ///< The selected process's memory maps and the selected mapping's pages.
+};
+
 /// UI state that lives across frames.
 struct ViewState
 {
     bool paused = false;
     std::optional<ProcessId> selected;
     ExpandRequest expand = ExpandRequest::none; ///< Applied to every tree node on the next frame.
-    bool show_details = true;                   ///< Lower pane with the selected process's memory maps.
-    float details_height = 0.0F;                ///< Lower pane height in pixels; 0 = a third of the window.
+    Page page = Page::processes;
     std::optional<std::uint64_t> selected_mapping; ///< Start address of the mapping whose pages are shown.
 };
 
@@ -45,9 +51,9 @@ struct FrameRequests
     bool refresh_now = false;
 };
 
-/// Draws the whole main window for one frame, filling the viewport: toolbar, process tree
-/// table, the details pane for the selected process, and the status bar.
-/// Keyboard: Space pauses/resumes, F5 refreshes, Ctrl+M shows/hides the details pane.
+/// Draws the whole main window for one frame, filling the viewport: toolbar, the current page
+/// (process tree, or memory maps of the selected process), and the status bar.
+/// Keyboard: Space pauses/resumes, F5 refreshes, Ctrl+M switches between the two pages.
 [[nodiscard]] FrameRequests draw_main_window(
     const model::Model& model,
     const model::ProcessDetails& details,

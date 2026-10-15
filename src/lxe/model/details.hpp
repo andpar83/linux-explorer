@@ -78,7 +78,7 @@ struct PageRun
     std::size_t max_buckets
 );
 
-/// What the lower pane shows about the selected process.
+/// What the memory maps page shows about the selected process.
 struct ProcessDetails
 {
     std::optional<ProcessId> pid;                 ///< nullopt: nothing selected.

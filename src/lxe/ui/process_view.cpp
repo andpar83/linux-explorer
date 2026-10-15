@@ -28,6 +28,8 @@ constexpr std::string_view icon_play = "";
 constexpr std::string_view icon_refresh = "";
 constexpr std::string_view icon_expand = "";
 constexpr std::string_view icon_collapse = "";
+constexpr std::string_view icon_processes = "";
+constexpr std::string_view icon_memory = "";
 
 enum class Column : unsigned char
 {
@@ -93,12 +95,46 @@ void handle_shortcuts(ViewState& state, FrameRequests& requests)
         requests.refresh_now = true;
     }
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_M)) {
-        state.show_details = !state.show_details;
+        state.page = state.page == Page::processes ? Page::memory_maps : Page::processes;
     }
+}
+
+/// One segment of the page switch; the current page's segment is drawn pressed.
+void page_button(ViewState& state, Page page, const std::string& label, std::string_view tooltip)
+{
+    const bool current = state.page == page;
+    if (current) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    }
+    if (ImGui::Button(label.c_str())) {
+        state.page = page;
+    }
+    if (current) {
+        ImGui::PopStyleColor();
+    }
+    item_tooltip(tooltip);
 }
 
 void draw_toolbar(ViewState& state, FrameRequests& requests, const ViewConfig& config)
 {
+    // The page switch comes first so it stays put while the buttons after it change per page.
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0F, ImGui::GetStyle().ItemSpacing.y});
+    page_button(
+        state,
+        Page::processes,
+        button_label(config, icon_processes, "Processes", "processes"),
+        "Show the process tree (Ctrl+M switches pages)"
+    );
+    ImGui::SameLine();
+    page_button(
+        state,
+        Page::memory_maps,
+        button_label(config, icon_memory, "Memory maps", "memory_maps"),
+        "Show the memory mappings of the selected process (Ctrl+M switches pages)"
+    );
+    ImGui::PopStyleVar();
+
+    ImGui::SameLine(0.0F, ImGui::GetFontSize() * 2.0F);
     const auto pause_label = state.paused ? button_label(config, icon_play, "Resume", "pause")
                                           : button_label(config, icon_pause, "Pause", "pause");
     if (ImGui::Button(pause_label.c_str())) {
@@ -112,6 +148,9 @@ void draw_toolbar(ViewState& state, FrameRequests& requests, const ViewConfig& c
     }
     item_tooltip("Refresh now (F5)");
 
+    if (state.page != Page::processes) {
+        return;
+    }
     ImGui::SameLine();
     if (ImGui::Button(button_label(config, icon_expand, "Expand all", "expand").c_str())) {
         state.expand = ExpandRequest::expand_all;
@@ -120,10 +159,6 @@ void draw_toolbar(ViewState& state, FrameRequests& requests, const ViewConfig& c
     if (ImGui::Button(button_label(config, icon_collapse, "Collapse all", "collapse").c_str())) {
         state.expand = ExpandRequest::collapse_all;
     }
-
-    ImGui::SameLine(0.0F, ImGui::GetFontSize() * 2.0F);
-    ImGui::Checkbox("Memory maps", &state.show_details);
-    item_tooltip("Show the memory mappings of the selected process (Ctrl+M)");
 }
 
 void setup_columns()
@@ -292,26 +327,6 @@ void draw_table(const model::Model& model, ViewState& state, const ViewConfig& c
     setup_columns();
     draw_rows(model, state, config);
     ImGui::EndTable();
-}
-
-/// A horizontal drag handle between the two panes; adjusts `height` of the lower pane.
-void draw_splitter(float& height, float min_height, float max_height)
-{
-    const float thickness = ImGui::GetStyle().ItemSpacing.y + 4.0F;
-    ImGui::InvisibleButton("splitter", ImVec2{std::max(ImGui::GetContentRegionAvail().x, 1.0F), thickness});
-    const bool active = ImGui::IsItemActive();
-    if (active) {
-        height -= ImGui::GetIO().MouseDelta.y;
-    }
-    if (active || ImGui::IsItemHovered()) {
-        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-    }
-    const ImVec2 top_left = ImGui::GetItemRectMin();
-    const ImVec2 bottom_right = ImGui::GetItemRectMax();
-    const float y = (top_left.y + bottom_right.y) * 0.5F;
-    const ImU32 color = ImGui::GetColorU32(active || ImGui::IsItemHovered() ? ImGuiCol_SeparatorHovered : ImGuiCol_Separator);
-    ImGui::GetWindowDrawList()->AddLine(ImVec2{top_left.x, y}, ImVec2{bottom_right.x, y}, color, 1.0F);
-    height = std::clamp(height, min_height, std::max(min_height, max_height));
 }
 
 /// A readable reason for a failed details read.
@@ -553,7 +568,7 @@ void draw_mapping_stats(const proc::MappingStats& stats)
     }
 }
 
-/// Right part of the lower pane: the pages of the selected mapping.
+/// Right part of the memory maps page: the pages of the selected mapping.
 void draw_pages_panel(const model::ProcessDetails& details, const ViewConfig& config)
 {
     if (!details.selected_mapping) {
@@ -605,7 +620,7 @@ void draw_details_content(const model::Model& model, const model::ProcessDetails
 {
     if (!details.pid) {
         ImGui::PushStyleColor(ImGuiCol_Text, config.palette.muted_text);
-        text("Select a process to see its memory maps.");
+        text("Select a process on the Processes page to see its memory maps here.");
         ImGui::PopStyleColor();
         return;
     }
@@ -638,9 +653,9 @@ void draw_details_content(const model::Model& model, const model::ProcessDetails
     ImGui::EndChild();
 }
 
-/// Lower pane: the memory mappings of the selected process. Occupies `height` whatever it
-/// shows, so the status bar below it stays put.
-void draw_details_pane(
+/// The memory maps page. Occupies `height` whatever it shows, so the status bar below it
+/// stays put.
+void draw_maps_page(
     const model::Model& model,
     const model::ProcessDetails& details,
     ViewState& state,
@@ -700,24 +715,15 @@ FrameRequests draw_main_window(
     if (ImGui::Begin("Linux Explorer", nullptr, window_flags)) {
         handle_shortcuts(state, requests);
         draw_toolbar(state, requests, config);
-        const float line = ImGui::GetTextLineHeight();
-        const float spacing = ImGui::GetStyle().ItemSpacing.y;
-        const float status_bar_height = line + spacing;
-        if (state.show_details) {
-            // Both panes share the space above the status bar; the lower one keeps its height.
-            const float available = ImGui::GetContentRegionAvail().y - status_bar_height;
-            const float min_pane = line * 4.0F;
-            if (state.details_height <= 0.0F) {
-                state.details_height = available / 3.0F;
-            }
-            const float splitter = spacing + 4.0F;
-            state.details_height = std::clamp(state.details_height, min_pane, std::max(min_pane, available - min_pane - splitter));
-            draw_table(model, state, config, std::max(available - state.details_height - splitter - spacing, min_pane));
-            draw_splitter(state.details_height, min_pane, available - min_pane - splitter);
-            draw_details_pane(model, details, state, config, -status_bar_height);
-        }
-        else {
+        const float status_bar_height = ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y;
+        // Negative heights leave that much room below for the status bar.
+        switch (state.page) {
+        case Page::processes:
             draw_table(model, state, config, -status_bar_height);
+            break;
+        case Page::memory_maps:
+            draw_maps_page(model, details, state, config, -status_bar_height);
+            break;
         }
         state.expand = ExpandRequest::none;
         draw_status_bar(model.summary, state, config);

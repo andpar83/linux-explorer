@@ -28,7 +28,8 @@ Options:
       --print-maps PID   print the memory maps of process PID ("self" for this one) and exit
       --proc-root DIR    read processes from DIR instead of /proc
       --select PID       open with process PID ("self" for this one) selected
-      --select-mapping M also select mapping M of it: a hex start address or a path like "[heap]"
+      --select-mapping M also select mapping M of it and open its memory maps: a hex start
+                         address or a path like "[heap]"
       --theme light|dark colour theme (default: follow the desktop setting)
       --screenshot FILE  open the window, save it to FILE (binary PPM) and exit
       --version          print the version and exit

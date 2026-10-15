@@ -2,7 +2,10 @@
 
 #include <imgui.h>
 #include <imgui_impl_null.h>
+#include <imgui_internal.h>
 
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace lxe::test {
@@ -67,8 +70,27 @@ public:
         return result;
     }
 
+    /// Activates the item `id` as a click would, over two frames, returning the first frame's
+    /// result. ImGui queues the activation for the next frame that submits the item.
+    template <class Draw>
+    auto activate(ImGuiID id, Draw&& draw)
+    {
+        ImGui::ActivateItemByID(id);
+        auto result = frame(draw);
+        std::ignore = frame(draw);
+        return result;
+    }
+
 private:
     ImVec2 display_size_{1920.0F, 1080.0F};
 };
+
+/// The id of a widget submitted at the top level of window `window`. `label` is the widget's
+/// label, or just its "###id" part when the visible caption varies. The window must exist.
+[[nodiscard]] inline ImGuiID item_id(std::string_view window, std::string_view label)
+{
+    const ImGuiWindow* found = ImGui::FindWindowByName(std::string{window}.c_str());
+    return found == nullptr ? 0 : ImGui::GetIDWithSeed(label.data(), label.data() + label.size(), found->ID);
+}
 
 } // namespace lxe::test
