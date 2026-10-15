@@ -1,10 +1,11 @@
 #include "lxe/model/details.hpp"
-#include "support/builders.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
 #include <vector>
+
+#include "support/builders.hpp"
 
 using lxe::model::PageRun;
 using lxe::model::plan_page_sample;
@@ -40,11 +41,11 @@ TEST_CASE("model.plan_page_sample.spreads_chunks_over_huge_mappings")
 TEST_CASE("model.summarize_pages.counts_flags_and_buckets")
 {
     const std::vector<std::uint64_t> entries{
-        pagemap_entry(true, false, true),               // present, exclusive
-        pagemap_entry(true, false, false, true, true),  // present, shared, soft-dirty
-        pagemap_entry(false, true, false, true),        // swapped, file/shared
-        pagemap_entry(false),                           // absent
-        pagemap_entry(false, false, false, true),       // absent with a stray bit 61: not counted as shared
+        pagemap_entry(true, false, true),              // present, exclusive
+        pagemap_entry(true, false, false, true, true), // present, shared, soft-dirty
+        pagemap_entry(false, true, false, true),       // swapped, file/shared
+        pagemap_entry(false),                          // absent
+        pagemap_entry(false, false, false, true),      // absent with a stray bit 61: not counted as shared
         pagemap_entry(true, false, true),
     };
     const auto summary = summarize_pages(entries, 4096, 6, 3);

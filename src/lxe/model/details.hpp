@@ -46,9 +46,15 @@ struct PageSummary
     std::uint64_t soft_dirty = 0;
     std::vector<PageBucket> buckets; ///< `examined` pages in order, split into equal buckets.
 
-    [[nodiscard]] std::uint64_t absent() const noexcept { return examined - present - swapped; }
+    [[nodiscard]] std::uint64_t absent() const noexcept
+    {
+        return examined - present - swapped;
+    }
 
-    [[nodiscard]] bool sampled() const noexcept { return examined < pages; }
+    [[nodiscard]] bool sampled() const noexcept
+    {
+        return examined < pages;
+    }
 };
 
 /// A run of consecutive pages to read from pagemap.
@@ -63,29 +69,22 @@ struct PageRun
 /// Which pagemap entries to read for `pages` pages starting at `first_page`: all of them when
 /// there are at most `max_entries`, otherwise `chunks` evenly spread runs of about
 /// `max_entries` entries in total, so huge mappings cost a bounded amount of reading.
-[[nodiscard]] std::vector<PageRun> plan_page_sample(
-    std::uint64_t first_page,
-    std::uint64_t pages,
-    std::size_t max_entries,
-    std::size_t chunks
-);
+[[nodiscard]] std::vector<PageRun>
+plan_page_sample(std::uint64_t first_page, std::uint64_t pages, std::size_t max_entries, std::size_t chunks);
 
 /// Classifies pagemap `entries` (in address order) of a mapping of `pages` pages.
 [[nodiscard]] PageSummary summarize_pages(
-    std::span<const std::uint64_t> entries,
-    std::uint64_t page_bytes,
-    std::uint64_t pages,
-    std::size_t max_buckets
+    std::span<const std::uint64_t> entries, std::uint64_t page_bytes, std::uint64_t pages, std::size_t max_buckets
 );
 
 /// What the memory maps page shows about the selected process.
 struct ProcessDetails
 {
-    std::optional<ProcessId> pid;                 ///< nullopt: nothing selected.
-    std::vector<MappingInfo> maps;                ///< Memory mappings, valid when `error` is empty.
-    std::error_code error;                        ///< Why `maps` could not be read (permission, exited).
+    std::optional<ProcessId> pid;                  ///< nullopt: nothing selected.
+    std::vector<MappingInfo> maps;                 ///< Memory mappings, valid when `error` is empty.
+    std::error_code error;                         ///< Why `maps` could not be read (permission, exited).
     std::optional<std::uint64_t> selected_mapping; ///< Start address of the mapping whose pages are shown.
-    std::optional<PageSummary> pages;             ///< Pages of the selected mapping, when readable.
+    std::optional<PageSummary> pages;              ///< Pages of the selected mapping, when readable.
     std::error_code pages_error;
 
     [[nodiscard]] std::uint64_t mapped_bytes() const noexcept;
@@ -95,10 +94,8 @@ struct ProcessDetails
 };
 
 /// Mappings of `pid` with page accounting; without it when this kernel's smaps can't be parsed.
-[[nodiscard]] std::expected<std::vector<MappingInfo>, std::error_code> load_mappings(
-    const proc::ProcFs& fs,
-    ProcessId pid
-);
+[[nodiscard]] std::expected<std::vector<MappingInfo>, std::error_code>
+load_mappings(const proc::ProcFs& fs, ProcessId pid);
 
 struct DetailsRequest
 {
@@ -107,6 +104,7 @@ struct DetailsRequest
 };
 
 /// Reads the details for `request`; an empty result when nothing is selected.
-[[nodiscard]] ProcessDetails load_details(const proc::ProcFs& fs, const DetailsRequest& request, std::uint64_t page_bytes);
+[[nodiscard]] ProcessDetails
+load_details(const proc::ProcFs& fs, const DetailsRequest& request, std::uint64_t page_bytes);
 
 } // namespace lxe::model

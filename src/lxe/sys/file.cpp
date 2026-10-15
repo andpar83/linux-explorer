@@ -2,12 +2,12 @@
 
 #include "lxe/sys/unique_fd.hpp"
 
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <algorithm>
 #include <cerrno>
 #include <span>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace lxe::sys {
 

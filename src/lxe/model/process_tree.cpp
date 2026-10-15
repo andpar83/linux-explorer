@@ -12,9 +12,7 @@ constexpr std::size_t no_parent = std::numeric_limits<std::size_t>::max();
 
 /// Marks `start` and everything below it as reachable. Iterative: trees can be arbitrarily deep.
 void mark_reachable(
-    std::size_t start,
-    const std::vector<std::vector<std::size_t>>& children,
-    std::vector<std::uint8_t>& reachable
+    std::size_t start, const std::vector<std::vector<std::size_t>>& children, std::vector<std::uint8_t>& reachable
 )
 {
     std::vector<std::size_t> pending{start};
@@ -31,8 +29,7 @@ void mark_reachable(
 
 } // namespace
 
-ProcessTree::ProcessTree(std::span<const ProcessEntry> processes)
-: children_(processes.size())
+ProcessTree::ProcessTree(std::span<const ProcessEntry> processes) : children_(processes.size())
 {
     std::unordered_map<ProcessId, std::size_t> index_of;
     index_of.reserve(processes.size());
@@ -46,8 +43,7 @@ ProcessTree::ProcessTree(std::span<const ProcessEntry> processes)
         if (found != index_of.end() && found->second != i) {
             parent[i] = found->second;
             children_[found->second].push_back(i);
-        }
-        else {
+        } else {
             roots_.push_back(i);
         }
     }

@@ -9,13 +9,6 @@
 #include "lxe/util/scope_exit.hpp"
 #include "lxe/version.hpp"
 
-#include <SDL3/SDL.h>
-#include <imgui.h>
-#include <imgui_impl_opengl3.h>
-#include <imgui_impl_sdl3.h>
-
-#include <unistd.h>
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -31,6 +24,12 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <SDL3/SDL.h>
+#include <imgui.h>
+#include <imgui_impl_opengl3.h>
+#include <imgui_impl_sdl3.h>
+#include <unistd.h>
 
 namespace lxe::app {
 namespace {
@@ -68,14 +67,20 @@ constexpr std::array mono_fonts{
 
 struct WindowDeleter
 {
-    void operator()(SDL_Window* window) const noexcept { SDL_DestroyWindow(window); }
+    void operator()(SDL_Window* window) const noexcept
+    {
+        SDL_DestroyWindow(window);
+    }
 };
 
 using WindowHandle = std::unique_ptr<SDL_Window, WindowDeleter>;
 
 struct GlContextDeleter
 {
-    void operator()(SDL_GLContextState* context) const noexcept { SDL_GL_DestroyContext(context); }
+    void operator()(SDL_GLContextState* context) const noexcept
+    {
+        SDL_GL_DestroyContext(context);
+    }
 };
 
 using GlContextHandle = std::unique_ptr<SDL_GLContextState, GlContextDeleter>;
@@ -205,7 +210,8 @@ struct Fonts
     std::uint64_t address = 0;
     const char* const last = std::to_address(wanted.end());
     constexpr int hex = 16;
-    if (const auto [end, error] = std::from_chars(wanted.data(), last, address, hex); error == std::errc{} && end == last) {
+    if (const auto [end, error] = std::from_chars(wanted.data(), last, address, hex);
+        error == std::errc{} && end == last) {
         return address;
     }
     return std::nullopt;
@@ -324,8 +330,7 @@ int run(const proc::ProcFs& fs, const Options& options)
     const auto refresh = [&] {
         if (auto snapshot = fs.read_snapshot()) {
             model = sampler.update(*snapshot);
-        }
-        else {
+        } else {
             std::println(stderr, "linux-explorer: cannot read {}: {}", fs.root().string(), snapshot.error().message());
         }
         details = model::load_details(fs, wanted_details(), page_bytes);
@@ -346,19 +351,17 @@ int run(const proc::ProcFs& fs, const Options& options)
         bool have_event = false;
         if (const auto now = Clock::now(); now < active_until || options.screenshot) {
             have_event = SDL_PollEvent(&event);
-        }
-        else if (state.paused) {
+        } else if (state.paused) {
             have_event = SDL_WaitEvent(&event);
-        }
-        else {
-            const auto wait = std::chrono::ceil<std::chrono::milliseconds>(std::max(next_refresh - now, Clock::duration{}));
+        } else {
+            const auto wait =
+                std::chrono::ceil<std::chrono::milliseconds>(std::max(next_refresh - now, Clock::duration{}));
             have_event = SDL_WaitEventTimeout(&event, static_cast<Sint32>(wait.count()));
         }
         while (have_event) {
             ImGui_ImplSDL3_ProcessEvent(&event);
-            if (event.type == SDL_EVENT_QUIT ||
-                (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
-                 event.window.windowID == SDL_GetWindowID(window.get()))) {
+            if (event.type == SDL_EVENT_QUIT || (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
+                                                 event.window.windowID == SDL_GetWindowID(window.get()))) {
                 running = false;
             }
             if (event.type == SDL_EVENT_SYSTEM_THEME_CHANGED) {
@@ -382,7 +385,8 @@ int run(const proc::ProcFs& fs, const Options& options)
         ImGui::NewFrame();
         const ui::FrameRequests requests = ui::draw_main_window(model, details, state, config);
         ImGui::Render();
-        if (const auto wanted = wanted_details(); details.pid != wanted.pid || details.selected_mapping != wanted.mapping) {
+        if (const auto wanted = wanted_details();
+            details.pid != wanted.pid || details.selected_mapping != wanted.mapping) {
             details = model::load_details(fs, wanted, page_bytes); // selection changed: show it right away
         }
 

@@ -1,11 +1,12 @@
 #include "lxe/model/details.hpp"
 #include "lxe/model/format.hpp"
 #include "lxe/model/text_maps.hpp"
-#include "support/builders.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <vector>
+
+#include "support/builders.hpp"
 
 using lxe::model::format_permissions;
 using lxe::model::render_maps_text;
@@ -30,17 +31,22 @@ TEST_CASE("model.text_maps.renders_a_fixed_width_table")
         info(mapping(0x7f0000300000, 0x7f0000301000, {}, "---p")),
         info(mapping(0xffffffffff600000, 0xffffffffff601000, "[vsyscall]", "--xp")),
     };
-    CHECK(render_maps_text(maps) == "Address                Size        Rss Perms Offset   Path\n"
-                                    "0000000000400000    4.0 KiB    4.0 KiB r-xp  00000000 /home/alice/my prog\n"
-                                    "00007f0000000000  132.0 KiB            rw-p  00000000 [heap]\n"
-                                    "00007f0000300000    4.0 KiB            ---p  00000000 \n"
-                                    "ffffffffff600000    4.0 KiB            --xp  00000000 [vsyscall]\n"
-                                    "4 mappings, 144.0 KiB mapped, 4.0 KiB resident\n");
+    CHECK(
+        render_maps_text(maps) == "Address                Size        Rss Perms Offset   Path\n"
+                                  "0000000000400000    4.0 KiB    4.0 KiB r-xp  00000000 /home/alice/my prog\n"
+                                  "00007f0000000000  132.0 KiB            rw-p  00000000 [heap]\n"
+                                  "00007f0000300000    4.0 KiB            ---p  00000000 \n"
+                                  "ffffffffff600000    4.0 KiB            --xp  00000000 [vsyscall]\n"
+                                  "4 mappings, 144.0 KiB mapped, 4.0 KiB resident\n"
+    );
 }
 
 TEST_CASE("model.text_maps.empty_list")
 {
-    CHECK(render_maps_text({}) == "Address                Size        Rss Perms Offset   Path\n0 mappings, 0 B mapped, 0 B resident\n");
+    CHECK(
+        render_maps_text({}) ==
+        "Address                Size        Rss Perms Offset   Path\n0 mappings, 0 B mapped, 0 B resident\n"
+    );
 }
 
 TEST_CASE("model.details.sums_mapped_bytes_and_finds_the_selected_mapping")

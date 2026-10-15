@@ -8,8 +8,6 @@
 #include "lxe/sys/file.hpp"
 #include "lxe/sys/system.hpp"
 
-#include <unistd.h>
-
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -18,6 +16,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <unistd.h>
 
 TEST_CASE("proc.read_snapshot")
 {

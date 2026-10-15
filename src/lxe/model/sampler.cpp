@@ -16,10 +16,7 @@ namespace {
 
 } // namespace
 
-Sampler::Sampler(std::uint64_t page_size, sys::UserNames users)
-: page_size_{page_size}
-, users_{std::move(users)}
-{}
+Sampler::Sampler(std::uint64_t page_size, sys::UserNames users) : page_size_{page_size}, users_{std::move(users)} {}
 
 Model Sampler::update(const proc::Snapshot& snapshot)
 {
@@ -52,8 +49,7 @@ Model Sampler::update(const proc::Snapshot& snapshot)
         };
         if (elapsed) {
             const auto previous = previous_processes_.find(stat.pid);
-            if (previous != previous_processes_.end() &&
-                previous->second.start_time_ticks == stat.start_time_ticks) {
+            if (previous != previous_processes_.end() && previous->second.start_time_ticks == stat.start_time_ticks) {
                 const std::uint64_t before = previous->second.cpu_ticks;
                 const std::uint64_t now = stat.cpu_ticks();
                 entry.cpu_percent = percent(now >= before ? now - before : 0, *elapsed);

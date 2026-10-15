@@ -26,7 +26,8 @@ std::string render_maps_text(std::span<const MappingInfo> maps)
             mapping.path
         );
     }
-    out += std::format("{} mappings, {} mapped, {} resident\n", maps.size(), format_bytes(total), format_bytes(resident));
+    out +=
+        std::format("{} mappings, {} mapped, {} resident\n", maps.size(), format_bytes(total), format_bytes(resident));
     return out;
 }
 

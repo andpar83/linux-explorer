@@ -1,9 +1,10 @@
 #include "lxe/proc/parse.hpp"
-#include "support/builders.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <string_view>
+
+#include "support/builders.hpp"
 
 using namespace std::string_view_literals;
 using lxe::proc::parse_maps;
@@ -12,7 +13,8 @@ using lxe::test::mapping;
 
 TEST_CASE("proc.parse_maps.reads_every_field")
 {
-    const auto maps = parse_maps("5f1e4121c000-5f1e4124d000 r-xp 00031000 103:03 49414585                  /usr/bin/bash\n");
+    const auto maps =
+        parse_maps("5f1e4121c000-5f1e4124d000 r-xp 00031000 103:03 49414585                  /usr/bin/bash\n");
     REQUIRE(maps.has_value());
     REQUIRE(maps->size() == 1);
     const auto& m = maps->front();

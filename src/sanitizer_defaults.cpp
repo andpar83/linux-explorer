@@ -31,6 +31,7 @@ extern "C" {
 // to fix; a report with one of our frames in the stack and none of these is still shown.
 // Names are exact library files: TSan refuses a called_from_lib entry that matches more than
 // one loaded library. "<unknown module>" is code SDL unloaded (dlclose) before the leak check.
+// clang-format off: one library per line, so the list reads and diffs as a list.
 #define LXE_DESKTOP_LIBRARIES(kind) \
     kind ":libdbus-1.so\n" \
     kind ":libglib-2.0.so\n" \
@@ -73,6 +74,7 @@ extern "C" {
     kind ":libnvidia-glcore.so\n" \
     kind ":libnvidia-glsi.so\n" \
     kind ":libnvidia-gpucomp.so\n"
+// clang-format on
 
 [[gnu::used]] const char* __lsan_default_suppressions() noexcept
 {
@@ -82,8 +84,8 @@ extern "C" {
 [[gnu::used]] const char* __tsan_default_suppressions() noexcept
 {
     // called_from_lib: ignore everything TSan intercepts while inside these libraries.
-    return LXE_DESKTOP_LIBRARIES("called_from_lib") LXE_DESKTOP_LIBRARIES("race")
-        LXE_DESKTOP_LIBRARIES("mutex") LXE_DESKTOP_LIBRARIES("deadlock") LXE_DESKTOP_LIBRARIES("thread");
+    return LXE_DESKTOP_LIBRARIES("called_from_lib") LXE_DESKTOP_LIBRARIES("race") LXE_DESKTOP_LIBRARIES("mutex")
+        LXE_DESKTOP_LIBRARIES("deadlock") LXE_DESKTOP_LIBRARIES("thread");
 }
 
 #undef LXE_DESKTOP_LIBRARIES

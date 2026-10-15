@@ -1,9 +1,9 @@
 #pragma once
 
-#include <sys/types.h>
-
 #include <format>
 #include <utility>
+
+#include <sys/types.h>
 
 namespace lxe {
 

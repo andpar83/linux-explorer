@@ -1,12 +1,12 @@
 #include "lxe/sys/users.hpp"
 
-#include <pwd.h>
-#include <unistd.h>
-
 #include <cerrno>
 #include <format>
 #include <utility>
 #include <vector>
+
+#include <pwd.h>
+#include <unistd.h>
 
 namespace lxe::sys {
 
@@ -37,13 +37,9 @@ UserId current_user() noexcept
     return UserId{::geteuid()};
 }
 
-UserNames::UserNames()
-: UserNames{Lookup{lookup_system_user}}
-{}
+UserNames::UserNames() : UserNames{Lookup{lookup_system_user}} {}
 
-UserNames::UserNames(Lookup lookup)
-: lookup_{std::move(lookup)}
-{}
+UserNames::UserNames(Lookup lookup) : lookup_{std::move(lookup)} {}
 
 const std::string& UserNames::name(UserId uid)
 {

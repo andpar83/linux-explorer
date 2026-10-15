@@ -8,8 +8,6 @@
 #include "lxe/ui/theme.hpp"
 #include "lxe/version.hpp"
 
-#include <unistd.h>
-
 #include <cstdio>
 #include <exception>
 #include <filesystem>
@@ -17,6 +15,8 @@
 #include <print>
 #include <span>
 #include <string_view>
+
+#include <unistd.h>
 
 namespace {
 
@@ -137,8 +137,7 @@ int main(int argc, char* argv[])
 {
     try {
         return run(std::span<char* const>{argv, static_cast<std::size_t>(argc)});
-    }
-    catch (const std::exception& error) {
+    } catch (const std::exception& error) {
         std::println(stderr, "linux-explorer: fatal error: {}", error.what());
         return 1;
     }

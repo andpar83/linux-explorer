@@ -3,12 +3,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <filesystem>
 #include <format>
 #include <string>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 using lxe::sys::read_file;
 
@@ -19,7 +19,7 @@ class TempFile
 {
 public:
     explicit TempFile(const std::string& content)
-    : path_{std::filesystem::temp_directory_path() / std::format("lxe-read-file-test-{}", ::getpid())}
+        : path_{std::filesystem::temp_directory_path() / std::format("lxe-read-file-test-{}", ::getpid())}
     {
         const lxe::sys::UniqueFd fd{::open(path_.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600)};
         REQUIRE(fd.valid());
@@ -37,7 +37,10 @@ public:
         std::filesystem::remove(path_, ignored);
     }
 
-    [[nodiscard]] const std::filesystem::path& path() const { return path_; }
+    [[nodiscard]] const std::filesystem::path& path() const
+    {
+        return path_;
+    }
 
 private:
     std::filesystem::path path_;

@@ -1,15 +1,16 @@
 // Drives the real view code headlessly (ImGui null backend): no window, no GPU, deterministic.
 #include "lxe/ui/process_view.hpp"
 #include "lxe/ui/theme.hpp"
-#include "support/builders.hpp"
-#include "support/headless_imgui.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <imgui_internal.h>
-
 #include <cstdint>
 #include <system_error>
+
+#include <imgui_internal.h>
+
+#include "support/builders.hpp"
+#include "support/headless_imgui.hpp"
 
 using lxe::ProcessId;
 using lxe::UserId;
@@ -97,7 +98,8 @@ TEST_CASE("main_window.draws_a_model_in_both_themes")
         const auto config = config_for(theme);
         ViewState state;
         for (int i = 0; i < 3; ++i) {
-            const auto requests = imgui.frame([&] { return lxe::ui::draw_main_window(model, no_details, state, config); });
+            const auto requests =
+                imgui.frame([&] { return lxe::ui::draw_main_window(model, no_details, state, config); });
             CHECK_FALSE(requests.refresh_now);
         }
         CHECK_FALSE(state.paused);
@@ -201,14 +203,20 @@ TEST_CASE("main_window.maps_page_shows_maps_errors_and_hints")
 
     std::ignore = draw(no_details); // nothing selected: a hint
     state.selected = ProcessId{100};
-    std::ignore = draw(details_for(100, 3)); // maps of a listed process
+    std::ignore = draw(details_for(100, 3));  // maps of a listed process
     std::ignore = draw(details_for(4242, 2)); // maps of a process no longer in the table
 
-    lxe::model::ProcessDetails denied{.pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::permission_denied)};
+    lxe::model::ProcessDetails denied{
+        .pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::permission_denied)
+    };
     std::ignore = draw(denied);
-    lxe::model::ProcessDetails gone{.pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::no_such_file_or_directory)};
+    lxe::model::ProcessDetails gone{
+        .pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::no_such_file_or_directory)
+    };
     std::ignore = draw(gone);
-    lxe::model::ProcessDetails other{.pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::io_error)};
+    lxe::model::ProcessDetails other{
+        .pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::io_error)
+    };
     std::ignore = draw(other);
     CHECK(state.page == Page::memory_maps);
 }

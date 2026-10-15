@@ -14,7 +14,8 @@ constexpr std::size_t max_page_buckets = 512;
 
 } // namespace
 
-std::vector<PageRun> plan_page_sample(std::uint64_t first_page, std::uint64_t pages, std::size_t max_entries, std::size_t chunks)
+std::vector<PageRun>
+plan_page_sample(std::uint64_t first_page, std::uint64_t pages, std::size_t max_entries, std::size_t chunks)
 {
     std::vector<PageRun> runs;
     if (pages == 0 || max_entries == 0) {
@@ -37,7 +38,9 @@ std::vector<PageRun> plan_page_sample(std::uint64_t first_page, std::uint64_t pa
     return runs;
 }
 
-PageSummary summarize_pages(std::span<const std::uint64_t> entries, std::uint64_t page_bytes, std::uint64_t pages, std::size_t max_buckets)
+PageSummary summarize_pages(
+    std::span<const std::uint64_t> entries, std::uint64_t page_bytes, std::uint64_t pages, std::size_t max_buckets
+)
 {
     PageSummary summary{.page_bytes = page_bytes, .pages = pages, .examined = entries.size()};
     const std::size_t bucket_count = std::min(entries.size(), std::max<std::size_t>(max_buckets, 1));
@@ -49,8 +52,7 @@ PageSummary summarize_pages(std::span<const std::uint64_t> entries, std::uint64_
         if (flags.present) {
             ++summary.present;
             ++bucket.present;
-        }
-        else if (flags.swapped) {
+        } else if (flags.swapped) {
             ++summary.swapped;
             ++bucket.swapped;
         }
@@ -79,7 +81,8 @@ const MappingInfo* ProcessDetails::selected() const noexcept
     if (!selected_mapping) {
         return nullptr;
     }
-    const auto found = std::ranges::find(maps, *selected_mapping, [](const MappingInfo& info) { return info.mapping.start; });
+    const auto found =
+        std::ranges::find(maps, *selected_mapping, [](const MappingInfo& info) { return info.mapping.start; });
     return found == maps.end() ? nullptr : &*found;
 }
 
@@ -92,8 +95,8 @@ std::expected<std::vector<MappingInfo>, std::error_code> load_mappings(const pro
             result.push_back(MappingInfo{.mapping = std::move(entry.mapping), .stats = std::move(entry.stats)});
         }
         return result;
-    }
-    else if (smaps.error().category() != proc::parse_error_category() && smaps.error() != std::errc::no_such_file_or_directory) {
+    } else if (smaps.error().category() != proc::parse_error_category() &&
+               smaps.error() != std::errc::no_such_file_or_directory) {
         return std::unexpected{smaps.error()}; // can't read (e.g. permission): maps would fail the same way
     }
     // No smaps (kernel without CONFIG_PROC_PAGE_MONITOR) or a layout this parser doesn't
@@ -117,8 +120,7 @@ ProcessDetails load_details(const proc::ProcFs& fs, const DetailsRequest& reques
     }
     if (auto maps = load_mappings(fs, *request.pid)) {
         details.maps = std::move(*maps);
-    }
-    else {
+    } else {
         details.error = maps.error();
         return details;
     }
@@ -128,7 +130,8 @@ ProcessDetails load_details(const proc::ProcFs& fs, const DetailsRequest& reques
     }
     const std::uint64_t pages = selected->mapping.size() / page_bytes;
     std::vector<std::uint64_t> entries;
-    for (const PageRun& run : plan_page_sample(selected->mapping.start / page_bytes, pages, max_page_entries, sample_chunks)) {
+    for (const PageRun& run :
+         plan_page_sample(selected->mapping.start / page_bytes, pages, max_page_entries, sample_chunks)) {
         auto part = fs.read_pagemap(*request.pid, run.first_page, run.count);
         if (!part) {
             details.pages_error = part.error();
