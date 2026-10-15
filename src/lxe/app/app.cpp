@@ -307,12 +307,18 @@ int run(const proc::ProcFs& fs, const Options& options)
     model::Sampler sampler{page_bytes};
     model::Model model;
     model::ProcessDetails details;
-    ui::ViewState state{.paused = false, .selected = options.selected};
-    // Details are read only while the pane is visible; the pane shows what `details` says.
+    // A mapping given on the command line is only visible on the maps page, so start there.
+    ui::ViewState state{
+        .paused = false,
+        .selected = options.selected,
+        .page = options.selected_mapping ? ui::Page::memory_maps : ui::Page::processes,
+    };
+    // Details are read only while the maps page is shown; the page shows what `details` says.
     const auto wanted_details = [&] {
+        const bool shown = state.page == ui::Page::memory_maps;
         return model::DetailsRequest{
-            .pid = state.show_details ? state.selected : std::nullopt,
-            .mapping = state.show_details ? state.selected_mapping : std::nullopt,
+            .pid = shown ? state.selected : std::nullopt,
+            .mapping = shown ? state.selected_mapping : std::nullopt,
         };
     };
     const auto refresh = [&] {

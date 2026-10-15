@@ -16,10 +16,12 @@ using lxe::UserId;
 using lxe::test::entry;
 using lxe::test::HeadlessImGui;
 using lxe::test::info;
+using lxe::test::item_id;
 using lxe::test::make_model;
 using lxe::test::mapping;
 using lxe::test::pagemap_entry;
 using lxe::ui::ExpandRequest;
+using lxe::ui::Page;
 using lxe::ui::ViewConfig;
 using lxe::ui::ViewState;
 
@@ -187,12 +189,12 @@ TEST_CASE("main_window.draws_lists_longer_than_the_window")
     CHECK(state.expand == ExpandRequest::none);
 }
 
-TEST_CASE("main_window.details_pane_shows_maps_errors_and_hints")
+TEST_CASE("main_window.maps_page_shows_maps_errors_and_hints")
 {
     HeadlessImGui imgui;
     const auto model = sample_model();
     const auto config = config_for(lxe::ui::Theme::light);
-    ViewState state;
+    ViewState state{.page = Page::memory_maps};
     const auto draw = [&](const lxe::model::ProcessDetails& details) {
         return imgui.frame([&] { return lxe::ui::draw_main_window(model, details, state, config); });
     };
@@ -208,38 +210,59 @@ TEST_CASE("main_window.details_pane_shows_maps_errors_and_hints")
     std::ignore = draw(gone);
     lxe::model::ProcessDetails other{.pid = ProcessId{1}, .maps = {}, .error = std::make_error_code(std::errc::io_error)};
     std::ignore = draw(other);
-    CHECK(state.details_height > 0.0F);
+    CHECK(state.page == Page::memory_maps);
 }
 
-TEST_CASE("main_window.details_pane_clips_long_lists")
+TEST_CASE("main_window.maps_page_clips_long_lists")
 {
     HeadlessImGui imgui;
     imgui.set_display_size(800.0F, 300.0F);
     const auto model = sample_model();
     const auto config = config_for(lxe::ui::Theme::dark);
     const auto details = details_for(100, 20'000);
-    ViewState state{.paused = false, .selected = ProcessId{100}};
+    ViewState state{.paused = false, .selected = ProcessId{100}, .page = Page::memory_maps};
     for (int i = 0; i < 3; ++i) {
         std::ignore = imgui.frame([&] { return lxe::ui::draw_main_window(model, details, state, config); });
     }
 }
 
-TEST_CASE("main_window.ctrl_m_toggles_the_details_pane")
+TEST_CASE("main_window.ctrl_m_switches_between_pages")
 {
     HeadlessImGui imgui;
     const auto model = sample_model();
     const auto config = config_for(lxe::ui::Theme::light);
-    ViewState state;
-    const auto draw = [&] { return lxe::ui::draw_main_window(model, no_details, state, config); };
+    ViewState state{.paused = false, .selected = ProcessId{100}};
+    const auto draw = [&] { return lxe::ui::draw_main_window(model, details_for(100, 3), state, config); };
     std::ignore = imgui.frame(draw);
-    REQUIRE(state.show_details);
+    REQUIRE(state.page == Page::processes);
     std::ignore = imgui.press_chord(ImGuiMod_Ctrl, ImGuiKey_M, draw);
-    CHECK_FALSE(state.show_details);
+    CHECK(state.page == Page::memory_maps);
     std::ignore = imgui.press_chord(ImGuiMod_Ctrl, ImGuiKey_M, draw);
-    CHECK(state.show_details);
+    CHECK(state.page == Page::processes);
     // A plain M does nothing.
     std::ignore = imgui.press(ImGuiKey_M, draw);
-    CHECK(state.show_details);
+    CHECK(state.page == Page::processes);
+    CHECK(state.selected == ProcessId{100}); // the selection survives the round trip
+}
+
+TEST_CASE("main_window.toolbar_buttons_switch_pages")
+{
+    HeadlessImGui imgui;
+    const auto model = sample_model();
+    const auto config = config_for(lxe::ui::Theme::dark);
+    ViewState state{.paused = false, .selected = ProcessId{100}};
+    const auto draw = [&] { return lxe::ui::draw_main_window(model, details_for(100, 3), state, config); };
+    std::ignore = imgui.frame(draw);
+    const ImGuiID processes = item_id("Linux Explorer", "###processes");
+    const ImGuiID memory_maps = item_id("Linux Explorer", "###memory_maps");
+    REQUIRE(memory_maps != 0);
+    std::ignore = imgui.activate(memory_maps, draw);
+    CHECK(state.page == Page::memory_maps);
+    std::ignore = imgui.activate(memory_maps, draw); // already there: stays
+    CHECK(state.page == Page::memory_maps);
+    std::ignore = imgui.activate(processes, draw);
+    CHECK(state.page == Page::processes);
+    CHECK(state.selected == ProcessId{100});
 }
 
 TEST_CASE("main_window.pages_panel_shows_every_state")
@@ -247,7 +270,7 @@ TEST_CASE("main_window.pages_panel_shows_every_state")
     HeadlessImGui imgui;
     const auto model = sample_model();
     const auto config = config_for(lxe::ui::Theme::light);
-    ViewState state{.paused = false, .selected = ProcessId{100}};
+    ViewState state{.paused = false, .selected = ProcessId{100}, .page = Page::memory_maps};
     const auto draw = [&](const lxe::model::ProcessDetails& details) {
         return imgui.frame([&] { return lxe::ui::draw_main_window(model, details, state, config); });
     };

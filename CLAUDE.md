@@ -26,17 +26,17 @@ refresh every second only while unpaused; own processes tinted; kernel threads d
 heat-map cell; tooltip with the full command line; light/dark theme following the desktop;
 status bar with CPU %, memory, process and thread counts.
 
-A lower pane (Ctrl+M, draggable splitter) shows the selected process's memory maps from
-`/proc/<pid>/smaps` (falling back to `maps` when a kernel has no smaps): address, size, Rss,
-permissions, offset, path, with end address, Pss, dirty, swap, anonymous, device and inode as
-hidden-by-default columns. Clicking a mapping shows its pages on the right: a presence strip
-drawn from `/proc/<pid>/pagemap` (resident / swapped / not present per page, sampled for
-mappings over 1 GiB), counts of exclusive, file-or-shared and soft-dirty pages, and the smaps
-accounting (Rss, Pss, shared/private clean/dirty, anonymous, huge pages, swap, locked,
-referenced, THP eligibility, VmFlags with a tooltip explaining each code). Another user's
-process gives a clear permission message: the kernel only lets you read your own processes'
-memory without CAP_SYS_PTRACE. Physical page flags (`/proc/kpageflags`, the kernel's
-`page-types` tool) are root-only and not read yet.
+A second page, switched to from the toolbar or with Ctrl+M (which also switches back), fills the
+window with the selected process's memory maps from `/proc/<pid>/smaps` (falling back to `maps`
+when a kernel has no smaps): address, size, Rss, permissions, offset, path, with end address,
+Pss, dirty, swap, anonymous, device and inode as hidden-by-default columns. Clicking a mapping
+shows its pages on the right: a presence strip drawn from `/proc/<pid>/pagemap` (resident /
+swapped / not present per page, sampled for mappings over 1 GiB), counts of exclusive,
+file-or-shared and soft-dirty pages, and the smaps accounting (Rss, Pss, shared/private
+clean/dirty, anonymous, huge pages, swap, locked, referenced, THP eligibility, VmFlags with a
+tooltip explaining each code). Another user's process gives a clear permission message: the
+kernel only lets you read your own processes' memory without CAP_SYS_PTRACE. Physical page flags
+(`/proc/kpageflags`, the kernel's `page-types` tool) are root-only and not read yet.
 
 CLI: `--print-tree` (text tree), `--print-maps PID|self` (text table with Rss),
 `--select PID|self`, `--select-mapping ADDR|PATH`, `--proc-root DIR` (fixtures),
@@ -77,11 +77,14 @@ plain functions. What to know when touching UI code:
   null backend (no window, no GPU). Set a small display size to exercise clipping.
 - **Long flat lists** go through `ImGuiListClipper` (only visible rows are submitted); trees
   can't be clipped that way, they use the nesting cap above.
-- **Panes**: the lower pane is a child window of fixed height so the status bar never moves;
-  the splitter is an `InvisibleButton` whose drag delta changes `ViewState::details_height`.
+- **Pages**: `ViewState::page` picks what fills the space between the toolbar and the status
+  bar (process tree or memory maps); the selection survives switching. Each page is sized with a
+  negative height that leaves room for the status bar, so the status bar never moves.
+  `--select-mapping` opens the window on the maps page. Tests press toolbar buttons with
+  `HeadlessImGui::activate(item_id(window, "###id"), draw)`.
 - **Details loading** (`app.cpp`): `model::load_details` runs on every refresh and immediately
-  when the selection changes; nothing is read while the pane is hidden. smaps costs the kernel
-  a page-table walk (about 50 ms for 8000 mappings); pagemap reads are capped per mapping
+  when the selection or page changes; nothing is read while the maps page is not shown. smaps
+  costs the kernel a page-table walk (about 50 ms for 8000 mappings); pagemap reads are capped per mapping
   (`plan_page_sample`), so a terabyte-sized virtual mapping still costs a bounded 2 MiB read.
 - **Custom drawing**: the presence strip (`draw_presence_strip`) is the pattern for graphics:
   an `InvisibleButton` reserves the space and handles hover, the window draw list paints it,
@@ -267,7 +270,7 @@ sanitizer preset. Helpers live in `tests/support/`; fixtures in `tests/fixtures/
 | `unit` | One function/class in isolation: `/proc` parsers fed strings, tree building, CPU sampling arithmetic, formatting, strong types. | Catch2 (`tests/unit/`), registered via `lxe_add_catch_tests`. |
 | `integration` | Several components against real but controlled input: the fixture `/proc` tree, the live `/proc` of the test process itself (own PID, threads, fds are deterministic), real files. | Catch2 (`tests/integration/`). |
 | `property` | Generated inputs: round trips of valid `/proc` content, random parent links, arbitrary bytes into every parser. Seeded by Catch2 (`--rng-seed` reproduces). | Catch2 (`tests/property/`). |
-| `ui` | The real view code driven headlessly through ImGui's null backend: themes, shortcuts, expand/collapse, empty/deep/clipped trees, the details pane and pages panel in every state. | Catch2 + `tests/support/headless_imgui.hpp` (`tests/ui/`). |
+| `ui` | The real view code driven headlessly through ImGui's null backend: themes, shortcuts, expand/collapse, empty/deep/clipped trees, switching pages, the maps page and pages panel in every state. | Catch2 + `tests/support/headless_imgui.hpp` (`tests/ui/`). |
 | `fuzz` | A libFuzzer harness per untrusted-input parser (`tests/fuzz/*_fuzz.cpp`). Without Clang it is linked to `replay_main.cpp` and replays `tests/fuzz/corpus/*` as a test; add a corpus file for every crash or odd input found. | `fuzz_proc_parsers` target. |
 | `e2e` | The real `linux-explorer` binary: CLI options, text tree of the fixture, text tree of the live system. | `lxe_add_test()` in `tests/CMakeLists.txt`. |
 | `bench` | Micro-benchmarks of hot paths (`/proc` scan, `parse_stat`, sampling, text tree). Built everywhere, run only with `-L bench`. | Catch2 `BENCHMARK` (`tests/bench/`). |

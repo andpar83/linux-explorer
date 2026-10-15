@@ -7,12 +7,14 @@ process on the machine with CPU, memory, owner and command line, and (eventually
 into threads, file descriptors, memory maps, sockets and environment. Data comes straight from
 `/proc`; the UI is Dear ImGui on SDL3 + OpenGL.
 
-![linux-explorer showing the process tree, the memory maps of the selected process and the pages of one mapping](docs/screenshot.png)
+![linux-explorer showing the process tree](docs/screenshot.png)
+
+![The memory maps page: the mappings of the selected process and the pages of one mapping](docs/memory-maps.png)
 
 Status: early. Today it shows the process tree with PID, user, CPU %, memory, threads, state
-and command line, refreshing every second; the memory maps of the selected process in a lower
-pane with their page accounting; and for a selected mapping, which of its pages are resident,
-swapped or absent, in a light or dark theme that follows the desktop. See `CLAUDE.md` for
+and command line, refreshing every second; the memory maps of the selected process on a page
+of their own, with their page accounting; and for a selected mapping, which of its pages are
+resident, swapped or absent, in a light or dark theme that follows the desktop. See `CLAUDE.md` for
 goals, rules and roadmap.
 
 ## Install
@@ -54,12 +56,13 @@ linux-explorer --screenshot x.ppm    render the window to a file and exit
 linux-explorer --proc-root DIR       read a recorded /proc tree instead of the live one
 ```
 
-In the window: click a process to see its memory maps in the lower pane (**Ctrl+M** shows or
-hides it, drag the divider to resize); click a mapping to see its pages on the right. Only your
-own processes can be inspected unless you run as root. **Space** pauses/resumes live updates, **F5** refreshes,
-arrows and double-click expand/collapse nodes, columns can be resized, reordered and hidden
-(right-click the header; the maps pane has end address, device and inode columns hidden by
-default). Column layout is remembered in `~/.local/share/linux-explorer/`.
+In the window: select a process, then switch to the **Memory maps** page (toolbar or **Ctrl+M**,
+which also switches back) to see its mappings across the whole window; click a mapping to see
+its pages on the right. Only your own processes can be inspected unless you run as root.
+**Space** pauses/resumes live updates, **F5** refreshes, arrows and double-click expand/collapse
+nodes, columns can be resized, reordered and hidden (right-click the header; the maps page has
+end address, device and inode columns hidden by default). Column layout is remembered in
+`~/.local/share/linux-explorer/`.
 
 ## CLion
 
