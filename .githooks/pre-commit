@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Refuses a commit whose staged C++ files don't match .clang-format. Checks the staged content,
-# not the working tree, so partially staged files are judged by what is actually committed.
+# Refuses a commit whose staged C++ files don't match .clang-format. Everything comes from the
+# index, the C++ files and .clang-format alike, so a partially staged change is judged by what
+# is actually committed.
 # Enable once per clone: git config core.hooksPath .githooks
 set -euo pipefail
 
@@ -21,17 +22,48 @@ if [[ -z "$formatter" ]]; then
 fi
 
 mapfile -d '' files < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.cpp' '*.hpp' '*.h' '*.cc')
+if ((${#files[@]} == 0)); then
+    exit 0
+fi
+
+if ! git cat-file -e :.clang-format 2>/dev/null; then
+    echo "pre-commit: .clang-format is not in the index; C++ files can't be checked without it" >&2
+    exit 1
+fi
+style=$(mktemp)
+trap 'rm -f "$style"' EXIT
+git show :.clang-format >"$style"
+
 unformatted=()
 for file in "${files[@]}"; do
-    if ! git show ":$file" | "$formatter" --style=file --assume-filename="$file" | cmp -s - <(git show ":$file"); then
+    if ! git show ":$file" | "$formatter" --style="file:$style" --assume-filename="$file" |
+        cmp -s - <(git show ":$file"); then
         unformatted+=("$file")
     fi
 done
 
-if ((${#unformatted[@]} > 0)); then
-    echo "pre-commit: these staged files are not formatted:" >&2
-    printf '  %s\n' "${unformatted[@]}" >&2
-    quoted=$(printf ' %q' "${unformatted[@]}")
-    echo "Fix with: $formatter -i$quoted && git add$quoted" >&2
-    exit 1
+if ((${#unformatted[@]} == 0)); then
+    exit 0
 fi
+echo "pre-commit: these staged files are not formatted:" >&2
+printf '  %s\n' "${unformatted[@]}" >&2
+# Restaging a whole file would sweep in hunks deliberately left unstaged, so files with unstaged
+# changes get an interactive add instead.
+whole=()
+partial=()
+for file in "${unformatted[@]}"; do
+    if git diff --quiet -- "$file"; then
+        whole+=("$file")
+    else
+        partial+=("$file")
+    fi
+done
+if ((${#whole[@]} > 0)); then
+    quoted=$(printf ' %q' "${whole[@]}")
+    echo "Fix with: $formatter -i$quoted && git add$quoted" >&2
+fi
+if ((${#partial[@]} > 0)); then
+    quoted=$(printf ' %q' "${partial[@]}")
+    echo "Partially staged, so stage only the formatting of your hunks: $formatter -i$quoted && git add -p$quoted" >&2
+fi
+exit 1
